@@ -1,0 +1,5 @@
+
+ camera_name: "hikrobot"
+ exposure_ms: 3
+ gain: 10.0
+ vid_pid: "2bdf:0001"
