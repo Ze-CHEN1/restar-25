@@ -58,7 +58,7 @@ quaternion_canid: 0x01
 bullet_speed_canid: 0x110
 send_canid: 0xff
 can_interface: "can0"
-
+baudrate: 921600
 #####-----tracker参数-----#####
 min_detect_count: 5
 max_temp_lost_count: 25

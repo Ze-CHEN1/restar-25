@@ -11,9 +11,13 @@ Gimbal::Gimbal(const std::string & config_path)
 {
   auto yaml = tools::load(config_path);
   auto com_port = tools::read<std::string>(yaml, "com_port");
+  auto baudrate = yaml["baudrate"] ? yaml["baudrate"].as<uint32_t>() : 921600;
 
   try {
     serial_.setPort(com_port);
+    serial_.setBaudrate(baudrate);
+    auto timeout = serial::Timeout::simpleTimeout(20);
+    serial_.setTimeout(timeout);
     serial_.open();
     tools::logger()->info(
       "[Gimbal] Serial opened: port={}, baud={}, is_open={}", com_port, serial_.getBaudrate(),
@@ -33,6 +37,7 @@ Gimbal::~Gimbal()
 {
   quit_ = true;
   if (thread_.joinable()) thread_.join();
+  std::lock_guard<std::mutex> serial_lock(serial_mutex_);
   serial_.close();
 }
 
@@ -93,6 +98,8 @@ void Gimbal::send(io::VisionToGimbal VisionToGimbal)
     reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
 
   try {
+    std::lock_guard<std::mutex> serial_lock(serial_mutex_);
+    if (!serial_.isOpen()) return;
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
   } catch (const std::exception & e) {
     tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
@@ -114,6 +121,8 @@ void Gimbal::send(
     reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_) - sizeof(tx_data_.crc16));
 
   try {
+    std::lock_guard<std::mutex> serial_lock(serial_mutex_);
+    if (!serial_.isOpen()) return;
     serial_.write(reinterpret_cast<uint8_t *>(&tx_data_), sizeof(tx_data_));
   } catch (const std::exception & e) {
     tools::logger()->warn("[Gimbal] Failed to write serial: {}", e.what());
@@ -123,6 +132,8 @@ void Gimbal::send(
 bool Gimbal::read(uint8_t * buffer, size_t size)
 {
   try {
+    std::lock_guard<std::mutex> serial_lock(serial_mutex_);
+    if (!serial_.isOpen()) return false;
     return serial_.read(buffer, size) == size;
   } catch (const std::exception & e) {
     // tools::logger()->warn("[Gimbal] Failed to read serial: {}", e.what());
@@ -133,23 +144,26 @@ bool Gimbal::read(uint8_t * buffer, size_t size)
 void Gimbal::read_thread()
 {
   tools::logger()->info("[Gimbal] read_thread started.");
-  int error_count = 0;
   uint64_t head_fail_count = 0;
   uint64_t body_fail_count = 0;
   uint64_t bad_header_count = 0;
   uint64_t crc_fail_count = 0;
   uint64_t ok_count = 0;
+  auto last_ok_time = std::chrono::steady_clock::now();
+  auto last_reconnect_time = last_ok_time;
+  constexpr auto offline_timeout = std::chrono::milliseconds(500);
+  constexpr auto reconnect_interval = std::chrono::seconds(2);
 
   while (!quit_) {
-    if (error_count > 5000) {
-      error_count = 0;
-      tools::logger()->warn("[Gimbal] Too many errors, attempting to reconnect...");
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_ok_time > offline_timeout && now - last_reconnect_time > reconnect_interval) {
+      last_reconnect_time = now;
+      tools::logger()->warn("[Gimbal] No valid packets recently, attempting to reconnect...");
       reconnect();
       continue;
     }
 
     if (!read(reinterpret_cast<uint8_t *>(&rx_data_), sizeof(rx_data_.head))) {
-      error_count++;
       head_fail_count++;
       continue;
     }
@@ -164,7 +178,6 @@ void Gimbal::read_thread()
     if (!read(
           reinterpret_cast<uint8_t *>(&rx_data_) + sizeof(rx_data_.head),
           sizeof(rx_data_) - sizeof(rx_data_.head))) {
-      error_count++;
       body_fail_count++;
       continue;
     }
@@ -175,8 +188,8 @@ void Gimbal::read_thread()
       continue;
     }
 
-    error_count = 0;
     ok_count++;
+    last_ok_time = t;
     Eigen::Quaterniond q(rx_data_.q[0], rx_data_.q[1], rx_data_.q[2], rx_data_.q[3]);
     queue_.push({q, t});
 
@@ -218,6 +231,7 @@ void Gimbal::reconnect()
   for (int i = 0; i < max_retry_count && !quit_; ++i) {
     tools::logger()->warn("[Gimbal] Reconnecting serial, attempt {}/{}...", i + 1, max_retry_count);
     try {
+      std::lock_guard<std::mutex> serial_lock(serial_mutex_);
       serial_.close();
     } catch (...) {
     }
@@ -225,6 +239,7 @@ void Gimbal::reconnect()
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     try {
+      std::lock_guard<std::mutex> serial_lock(serial_mutex_);
       serial_.open();  // 尝试重新打开
       queue_.clear();
       tools::logger()->info(

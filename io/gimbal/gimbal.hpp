@@ -83,6 +83,7 @@ public:
 
 private:
   serial::Serial serial_;
+  mutable std::mutex serial_mutex_;
 
   std::thread thread_;
   std::atomic<bool> quit_ = false;
