@@ -1,0 +1,20 @@
+title = "{{TITLE}}"
+
+# 填完并核对 task.md 后改为 true。
+ready = false
+enabled = true
+
+# proposal：只写 research/projects/<slug>/；workspace-change：允许按 task.md 范围改源码。
+implementation_mode = "proposal"
+
+# offline / connected；留空则继承 research/runner.toml。
+information_mode = ""
+
+# 数字越大越先运行；同优先级优先选择累计回合较少的任务。
+priority = 100
+
+# 0 表示不限制累计回合数。
+max_rounds = 0
+
+# 可选：复用 research/projects/ 下的既有项目，相对仓库根目录填写。
+project_path = ""

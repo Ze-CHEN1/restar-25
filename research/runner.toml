@@ -1,0 +1,23 @@
+# tmux 后台会话名称。
+session_name = "restar_vision_agent"
+
+# 留空时使用 Codex CLI 的当前默认模型。
+model = ""
+reasoning_effort = "high"
+
+# 单个回合硬超时；0 表示不设置超时。
+attempt_timeout_minutes = 45
+
+# 前台/后台连续运行的总时限；0 表示直到停止请求或没有可运行任务。
+max_wall_hours = 8
+idle_seconds = 30
+max_idle_cycles = 1
+
+# 默认信息模式：offline / connected。任务可以覆盖。
+information_mode = "offline"
+
+# 连续运行故障达到该值后将任务冻结为 runtime-error。
+max_consecutive_runtime_failures = 3
+
+# 可选：Codex CLI 的绝对路径。留空时从 PATH 查找。
+codex_path = ""
