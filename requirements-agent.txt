@@ -1,0 +1,2 @@
+# Python 3.11+ 已内置 tomllib；Python 3.10 使用这个兼容包。
+tomli>=2.0.1; python_version < "3.11"

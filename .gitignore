@@ -1,5 +1,7 @@
 .vscode/
 .github/
+__pycache__/
+*.pyc
 build/
 build-asan/
 Camera/
@@ -14,3 +16,9 @@ testvideos/
 watchdog.sh
 records_24/
 records_25/
+
+# 视觉研究 Agent 的本机运行日志和未筛选实验产物。
+research/runtime/*
+!research/runtime/.gitkeep
+research/projects/*/artifacts/*
+!research/projects/*/artifacts/.gitkeep
