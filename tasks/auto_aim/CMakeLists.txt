@@ -14,6 +14,7 @@ add_library(auto_aim OBJECT
     aimer.cpp
     target.cpp
     tracker.cpp
+    dynamic_roi.cpp
     voter.cpp
     shooter.cpp
     yolo.cpp

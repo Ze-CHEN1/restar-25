@@ -1,14 +1,17 @@
 #include <fmt/core.h>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
+#include <optional>
 #include <thread>
 
 #include "io/camera.hpp"
 #include "io/gimbal/gimbal.hpp"
 #include "tasks/auto_aim/planner/planner.hpp"
+#include "tasks/auto_aim/dynamic_roi.hpp"
 #include "tasks/auto_aim/solver.hpp"
 #include "tasks/auto_aim/tracker.hpp"
 #include "tasks/auto_aim/yolo.hpp"
@@ -44,6 +47,8 @@ int main(int argc, char * argv[])
   auto_aim::Solver solver(config_path);
   auto_aim::Tracker tracker(config_path, solver);
   auto_aim::Planner planner(config_path);
+  auto_aim::DynamicRoiController dynamic_roi(config_path);
+  std::optional<auto_aim::Target> last_target;
 
   tools::ThreadSafeQueue<std::optional<auto_aim::Target>, true> target_queue(1);
   target_queue.push(std::nullopt);
@@ -112,12 +117,31 @@ int main(int argc, char * argv[])
     auto q = gimbal.q(t);
 
     solver.set_R_gimbal2world(q);
-    auto armors = yolo.detect(img);
+    const auto roi_candidates =
+      dynamic_roi.candidates(img.size(), last_target, solver, t, tracker.state());
+
+    std::list<auto_aim::Armor> armors;
+    for (const auto & roi : roi_candidates) {
+      auto candidate_armors = yolo.detect_with_roi(img, roi);
+      const auto has_enemy_armor = std::any_of(
+        candidate_armors.begin(), candidate_armors.end(),
+        [&dynamic_roi](const auto_aim::Armor & armor) {
+          return dynamic_roi.is_enemy_color(armor);
+        });
+      if (has_enemy_armor || roi == roi_candidates.back()) {
+        armors = std::move(candidate_armors);
+        break;
+      }
+    }
+
     auto targets = tracker.track(armors, t);
-    if (!targets.empty())
+    if (!targets.empty()) {
+      last_target = targets.front();
       target_queue.push(targets.front());
-    else
+    } else {
+      if (tracker.state() == "lost") last_target.reset();
       target_queue.push(std::nullopt);
+    }
 
     if (!targets.empty()) {
       auto target = targets.front();

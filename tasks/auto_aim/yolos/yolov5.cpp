@@ -56,20 +56,45 @@ YOLOV5::YOLOV5(const std::string & config_path, bool debug)
 
 std::list<Armor> YOLOV5::detect(const cv::Mat & raw_img, int frame_count)
 {
+  return detect_impl(raw_img, frame_count, std::nullopt);
+}
+
+std::list<Armor> YOLOV5::detect_with_roi(
+  const cv::Mat & raw_img, const cv::Rect & roi, int frame_count)
+{
+  return detect_impl(raw_img, frame_count, roi);
+}
+
+std::list<Armor> YOLOV5::detect_impl(
+  const cv::Mat & raw_img, int frame_count, const std::optional<cv::Rect> & roi_override)
+{
   if (raw_img.empty()) {
     tools::logger()->warn("Empty img!, camera drop!");
     return std::list<Armor>();
   }
 
+  const auto use_roi = roi_override.has_value() || use_roi_;
+  auto active_roi = roi_override.value_or(roi_);
   cv::Mat bgr_img;
-  if (use_roi_) {
-    if (roi_.width == -1) {  // -1 表示该维度不裁切
-      roi_.width = raw_img.cols;
+  if (use_roi) {
+    if (active_roi.width == -1) {  // -1 表示该维度不裁切
+      active_roi.width = raw_img.cols;
     }
-    if (roi_.height == -1) {  // -1 表示该维度不裁切
-      roi_.height = raw_img.rows;
+    if (active_roi.height == -1) {  // -1 表示该维度不裁切
+      active_roi.height = raw_img.rows;
     }
-    bgr_img = raw_img(roi_);
+
+    const auto image_rect = cv::Rect(0, 0, raw_img.cols, raw_img.rows);
+    if (
+      active_roi.x < 0 || active_roi.y < 0 || active_roi.width <= 0 || active_roi.height <= 0 ||
+      (active_roi & image_rect) != active_roi) {
+      tools::logger()->warn(
+        "Invalid runtime ROI: x={}, y={}, width={}, height={}, image={}x{}", active_roi.x,
+        active_roi.y, active_roi.width, active_roi.height, raw_img.cols, raw_img.rows);
+      return std::list<Armor>();
+    }
+
+    bgr_img = raw_img(active_roi);
   } else {
     bgr_img = raw_img;
   }
@@ -96,11 +121,14 @@ std::list<Armor> YOLOV5::detect(const cv::Mat & raw_img, int frame_count)
   auto output_shape = output_tensor.get_shape();
   cv::Mat output(output_shape[1], output_shape[2], CV_32F, output_tensor.data());
 
-  return parse(scale, output, raw_img, frame_count);
+  return parse(
+    scale, output, raw_img, frame_count, use_roi,
+    use_roi ? cv::Point2f(active_roi.x, active_roi.y) : cv::Point2f(0, 0), active_roi);
 }
 
 std::list<Armor> YOLOV5::parse(
-  double scale, cv::Mat & output, const cv::Mat & bgr_img, int frame_count)
+  double scale, cv::Mat & output, const cv::Mat & bgr_img, int frame_count, bool use_roi,
+  const cv::Point2f & offset, const cv::Rect & roi)
 {
   // for each row: xywh + classess
   std::vector<int> color_ids, num_ids;
@@ -161,9 +189,9 @@ std::list<Armor> YOLOV5::parse(
 
   std::list<Armor> armors;
   for (const auto & i : indices) {
-    if (use_roi_) {
+    if (use_roi) {
       armors.emplace_back(
-        color_ids[i], num_ids[i], confidences[i], boxes[i], armors_key_points[i], offset_);
+        color_ids[i], num_ids[i], confidences[i], boxes[i], armors_key_points[i], offset);
     } else {
       armors.emplace_back(color_ids[i], num_ids[i], confidences[i], boxes[i], armors_key_points[i]);
     }
@@ -187,7 +215,7 @@ std::list<Armor> YOLOV5::parse(
     ++it;
   }
 
-  if (debug_) draw_detections(bgr_img, armors, frame_count);
+  if (debug_) draw_detections(bgr_img, armors, frame_count, use_roi, roi);
 
   return armors;
 }
@@ -224,7 +252,8 @@ cv::Point2f YOLOV5::get_center_norm(const cv::Mat & bgr_img, const cv::Point2f &
 }
 
 void YOLOV5::draw_detections(
-  const cv::Mat & img, const std::list<Armor> & armors, int frame_count) const
+  const cv::Mat & img, const std::list<Armor> & armors, int frame_count, bool use_roi,
+  const cv::Rect & roi) const
 {
   auto detection = img.clone();
   tools::draw_text(detection, fmt::format("[{}]", frame_count), {10, 30}, {255, 255, 255});
@@ -236,9 +265,9 @@ void YOLOV5::draw_detections(
     tools::draw_text(detection, info, armor.center, {0, 255, 0});
   }
 
-  if (use_roi_) {
+  if (use_roi) {
     cv::Scalar green(0, 255, 0);
-    cv::rectangle(detection, roi_, green, 2);
+    cv::rectangle(detection, roi, green, 2);
   }
   cv::resize(detection, detection, {}, 0.5, 0.5);  // 显示时缩小图片尺寸
   cv::imshow("detection", detection);
@@ -262,7 +291,7 @@ double YOLOV5::sigmoid(double x)
 std::list<Armor> YOLOV5::postprocess(
   double scale, cv::Mat & output, const cv::Mat & bgr_img, int frame_count)
 {
-  return parse(scale, output, bgr_img, frame_count);
+  return parse(scale, output, bgr_img, frame_count, use_roi_, offset_, roi_);
 }
 
 }  // namespace auto_aim
