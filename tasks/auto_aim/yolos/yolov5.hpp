@@ -39,6 +39,8 @@ private:
 
   ov::Core core_;
   ov::CompiledModel compiled_model_;
+  ov::InferRequest infer_request_;
+  cv::Mat input_buffer_;
 
   cv::Rect roi_;
   cv::Point2f offset_;

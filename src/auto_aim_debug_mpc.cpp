@@ -121,14 +121,15 @@ int main(int argc, char * argv[])
       dynamic_roi.candidates(img.size(), last_target, solver, t, tracker.state());
 
     std::list<auto_aim::Armor> armors;
-    for (const auto & roi : roi_candidates) {
-      auto candidate_armors = yolo.detect_with_roi(img, roi);
+    for (size_t i = 0; i < roi_candidates.size(); ++i) {
+      const auto & candidate = roi_candidates[i];
+      auto candidate_armors = yolo.detect_with_roi(img, candidate.rect);
       const auto has_enemy_armor = std::any_of(
         candidate_armors.begin(), candidate_armors.end(),
         [&dynamic_roi](const auto_aim::Armor & armor) {
           return dynamic_roi.is_enemy_color(armor);
         });
-      if (has_enemy_armor || roi == roi_candidates.back()) {
+      if (has_enemy_armor || i + 1 == roi_candidates.size()) {
         armors = std::move(candidate_armors);
         break;
       }

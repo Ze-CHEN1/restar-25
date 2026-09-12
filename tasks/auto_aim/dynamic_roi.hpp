@@ -14,12 +14,27 @@
 
 namespace auto_aim
 {
+enum class RoiStage
+{
+  dynamic,
+  fixed,
+  full,
+};
+
+struct RoiCandidate
+{
+  cv::Rect rect;
+  RoiStage stage;
+};
+
+const char * roi_stage_name(RoiStage stage);
+
 class DynamicRoiController
 {
 public:
   explicit DynamicRoiController(const std::string & config_path);
 
-  std::vector<cv::Rect> candidates(
+  std::vector<RoiCandidate> candidates(
     const cv::Size & image_size, const std::optional<Target> & last_target, const Solver & solver,
     std::chrono::steady_clock::time_point timestamp, const std::string & tracker_state) const;
 

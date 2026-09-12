@@ -19,7 +19,7 @@ roi:
   width: 600
   height: 600
 
-use_roi:  true
+use_roi:  false
 use_dynamic_roi: true
 
 dynamic_roi:

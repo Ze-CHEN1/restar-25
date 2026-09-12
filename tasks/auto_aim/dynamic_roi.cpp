@@ -16,6 +16,19 @@ int read_int(const YAML::Node & node, const char * key, int default_value)
 }
 }  // namespace
 
+const char * roi_stage_name(RoiStage stage)
+{
+  switch (stage) {
+    case RoiStage::dynamic:
+      return "dynamic";
+    case RoiStage::fixed:
+      return "fixed";
+    case RoiStage::full:
+      return "full";
+  }
+  return "unknown";
+}
+
 DynamicRoiController::DynamicRoiController(const std::string & config_path)
 : enabled_(false),
   use_fixed_roi_(false),
@@ -50,32 +63,36 @@ DynamicRoiController::DynamicRoiController(const std::string & config_path)
   }
 }
 
-std::vector<cv::Rect> DynamicRoiController::candidates(
+std::vector<RoiCandidate> DynamicRoiController::candidates(
   const cv::Size & image_size, const std::optional<Target> & last_target, const Solver & solver,
   std::chrono::steady_clock::time_point timestamp, const std::string & tracker_state) const
 {
-  std::vector<cv::Rect> result;
+  std::vector<RoiCandidate> result;
 
-  auto add_unique = [&](const cv::Rect & rect) {
+  auto add_unique = [&](const cv::Rect & rect, RoiStage stage) {
     const auto valid = clamp_rect(rect, image_size);
     if (valid.width <= 0 || valid.height <= 0) return;
-    if (std::find(result.begin(), result.end(), valid) == result.end()) result.push_back(valid);
+    const auto duplicate = std::find_if(
+      result.begin(), result.end(),
+      [&valid](const RoiCandidate & candidate) { return candidate.rect == valid; });
+    if (duplicate == result.end()) result.push_back({valid, stage});
   };
 
-  if (enabled_ && last_target.has_value()) {
+  // 只有稳定跟踪时预测位置才足够可靠；丢失或暂时丢失时直接全图重捕获。
+  if (enabled_ && last_target.has_value() && tracker_state == "tracking") {
     const auto dynamic_roi =
       make_dynamic_roi(image_size, *last_target, solver, timestamp, tracker_state);
-    if (dynamic_roi.has_value()) add_unique(*dynamic_roi);
+    if (dynamic_roi.has_value()) add_unique(*dynamic_roi, RoiStage::dynamic);
   }
 
   if (use_fixed_roi_) {
     auto fixed_roi = fixed_roi_;
     if (fixed_roi.width == -1) fixed_roi.width = image_size.width - fixed_roi.x;
     if (fixed_roi.height == -1) fixed_roi.height = image_size.height - fixed_roi.y;
-    add_unique(fixed_roi);
+    add_unique(fixed_roi, RoiStage::fixed);
   }
 
-  add_unique(cv::Rect(0, 0, image_size.width, image_size.height));
+  add_unique(cv::Rect(0, 0, image_size.width, image_size.height), RoiStage::full);
   return result;
 }
 
@@ -94,7 +111,7 @@ std::optional<cv::Rect> DynamicRoiController::make_dynamic_roi(
   const cv::Size & image_size, const Target & target, const Solver & solver,
   std::chrono::steady_clock::time_point timestamp, const std::string & tracker_state) const
 {
-  if (tracker_state != "tracking" && tracker_state != "temp_lost") return std::nullopt;
+  if (tracker_state != "tracking") return std::nullopt;
 
   auto predicted_target = target;
   predicted_target.predict(timestamp);

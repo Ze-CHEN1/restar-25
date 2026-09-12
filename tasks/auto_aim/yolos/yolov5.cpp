@@ -52,6 +52,8 @@ YOLOV5::YOLOV5(const std::string & config_path, bool debug)
   model = ppp.build();
   compiled_model_ = core_.compile_model(
     model, device_, ov::hint::performance_mode(ov::hint::PerformanceMode::LATENCY));
+  infer_request_ = compiled_model_.create_infer_request();
+  input_buffer_ = cv::Mat(640, 640, CV_8UC3, cv::Scalar(0, 0, 0));
 }
 
 std::list<Armor> YOLOV5::detect(const cv::Mat & raw_img, int frame_count)
@@ -105,19 +107,18 @@ std::list<Armor> YOLOV5::detect_impl(
   auto h = static_cast<int>(bgr_img.rows * scale);
   auto w = static_cast<int>(bgr_img.cols * scale);
 
-  // preproces
-  auto input = cv::Mat(640, 640, CV_8UC3, cv::Scalar(0, 0, 0));
+  // Reuse the input storage; clear padding so data from the previous ROI is not retained.
+  input_buffer_.setTo(cv::Scalar(0, 0, 0));
   auto roi = cv::Rect(0, 0, w, h);
-  cv::resize(bgr_img, input(roi), {w, h});
-  ov::Tensor input_tensor(ov::element::u8, {1, 640, 640, 3}, input.data);
+  cv::resize(bgr_img, input_buffer_(roi), {w, h});
+  ov::Tensor input_tensor(ov::element::u8, {1, 640, 640, 3}, input_buffer_.data);
 
   // infer
-  auto infer_request = compiled_model_.create_infer_request();
-  infer_request.set_input_tensor(input_tensor);
-  infer_request.infer();
+  infer_request_.set_input_tensor(input_tensor);
+  infer_request_.infer();
 
   // postprocess
-  auto output_tensor = infer_request.get_output_tensor();
+  auto output_tensor = infer_request_.get_output_tensor();
   auto output_shape = output_tensor.get_shape();
   cv::Mat output(output_shape[1], output_shape[2], CV_32F, output_tensor.data());
 
