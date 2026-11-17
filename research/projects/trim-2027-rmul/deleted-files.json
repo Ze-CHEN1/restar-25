@@ -1,0 +1,102 @@
+[
+  {
+    "path": "tasks/auto_buff/buff_type.cpp",
+    "sha256": "0753fa7e911ec689225a367b310ba7cde602b58430506567b1cbcf11552c395b",
+    "bytes": 3554
+  },
+  {
+    "path": "tasks/auto_buff/buff_detector.hpp",
+    "sha256": "a1b7216447911ab600b9dd7e528496f6675ef4ebf77dfdf3ff0071c3906ec4b3",
+    "bytes": 929
+  },
+  {
+    "path": "tasks/auto_buff/yolo11_buff.hpp",
+    "sha256": "74c1971d627ce97f15e5fd51cb83557931bff4fefc1315ea2da983baf4c86c2d",
+    "bytes": 1724
+  },
+  {
+    "path": "tasks/auto_buff/buff_detector.cpp",
+    "sha256": "79ed71a012d5fd38527a93c44714d47ffbac806ebd9e89a7fa8d08a31051db7b",
+    "bytes": 5562
+  },
+  {
+    "path": "tasks/auto_buff/buff_type.hpp",
+    "sha256": "ce26c75140d861826ca332d23756a55f7871cec3372ff00e909a82b599b5c222",
+    "bytes": 1841
+  },
+  {
+    "path": "tasks/auto_buff/buff_aimer.hpp",
+    "sha256": "e969967c1a13d993b8f0f347318d4b14d1dc04c8e867a9cb092ab6493ee98b6d",
+    "bytes": 1292
+  },
+  {
+    "path": "tasks/auto_buff/buff_solver.cpp",
+    "sha256": "b7a7ee33eac7d21d3b1b0d83e8f755502c9957ea4d4d47c5e995602391f9b290",
+    "bytes": 5836
+  },
+  {
+    "path": "tasks/auto_buff/buff_predict.hpp",
+    "sha256": "a6836286ffc10a784a5ba8c2fea88d3245569f211f533e17a1763cb5eefd8368",
+    "bytes": 9682
+  },
+  {
+    "path": "tasks/auto_buff/yolo11_buff.cpp",
+    "sha256": "26be5ca837c3dea6059e1e584a42f0dcda0769a082d0edd603bd385933b95959",
+    "bytes": 13261
+  },
+  {
+    "path": "tasks/auto_buff/CMakeLists.txt",
+    "sha256": "bc8878798862bba157e8eac600f4b3eabd0167ab33cc2a9e0841e28eb0926446",
+    "bytes": 393
+  },
+  {
+    "path": "tasks/auto_buff/buff_target.cpp",
+    "sha256": "6c922d2a74a388cb7c086a99904ca49f121c3631fd592fdd09f93da19290c222",
+    "bytes": 22531
+  },
+  {
+    "path": "tasks/auto_buff/buff_solver.hpp",
+    "sha256": "4d0750759071c45442dc9ced726cf104936cfa5f70784cb014ad0e606eff90a5",
+    "bytes": 1904
+  },
+  {
+    "path": "tasks/auto_buff/buff_aimer.cpp",
+    "sha256": "3039fcc23acbe4ebc0fd436a1ac14d4c3a6dccba56b4b4b41800e99ebb6dff59",
+    "bytes": 6980
+  },
+  {
+    "path": "tasks/auto_buff/buff_target.hpp",
+    "sha256": "0ea57e73056a2e3b5829a07c2ad17668b3e2a1f17e246fdb4bd414bcdcbe54d3",
+    "bytes": 2436
+  },
+  {
+    "path": "src/auto_buff_debug.cpp",
+    "sha256": "3b49e7039d5759e077d233a3bd08ae6bcea4e505dffc5f368c093a6b0280fcd7",
+    "bytes": 4939
+  },
+  {
+    "path": "src/auto_buff_debug_mpc.cpp",
+    "sha256": "71ea3fb47c002623364e5e0486be76b21f24657a6ddd9d1ab3a4a65a6c373f29",
+    "bytes": 5298
+  },
+  {
+    "path": "tests/auto_buff_test.cpp",
+    "sha256": "7d57d715f68f1683a6b91f8bbb6b106a4bdcc66eee68ad9d3ba0fb53cf40e298",
+    "bytes": 5559
+  },
+  {
+    "path": "tools/ransac_sine_fitter.cpp",
+    "sha256": "f3817dc7fbcd504e2e15e013d61116220fee632974413381440c7356d6c29f01",
+    "bytes": 2630
+  },
+  {
+    "path": "tools/ransac_sine_fitter.hpp",
+    "sha256": "c179429e2268de31de892646d32fe6a1a2726a514f8461ab795dcd06e67d0ea6",
+    "bytes": 992
+  },
+  {
+    "path": "buff_layout.xml",
+    "sha256": "65c8ae3910f813da66135d8aa23b60b7d2c399466cf5286d4ca576c400b4cdd3",
+    "bytes": 9175
+  }
+]

@@ -1,48 +1,52 @@
 #include "publish2nav.hpp"
 
-#include <Eigen/Dense>
-#include <chrono>
-#include <memory>
-#include <thread>
-
-#include "tools/logger.hpp"
+#include <cmath>
+#include <string>
 
 namespace io
 {
-
-Publish2Nav::Publish2Nav() : Node("auto_aim_target_pos_publisher")
+Publish2Nav::Publish2Nav(const rclcpp::NodeOptions & options)
+: Node("restar_vision_publisher", options)
 {
-  publisher_ = this->create_publisher<std_msgs::msg::String>("auto_aim_target_pos", 10);
-
-  RCLCPP_INFO(this->get_logger(), "auto_aim_target_pos_publisher node initialized.");
+  publisher_ = create_publisher<std_msgs::msg::String>("auto_aim_target_pos", 10);
+  target_publisher_ = create_publisher<robot_interfaces::msg::VisionTarget2D>(
+    "vision/target", rclcpp::QoS(rclcpp::KeepLast(5)).best_effort().durability_volatile());
+  command_publisher_ = create_publisher<robot_interfaces::msg::GimbalCommand>(
+    "vision/gimbal_cmd", rclcpp::QoS(rclcpp::KeepLast(1)).reliable().durability_volatile());
 }
 
-Publish2Nav::~Publish2Nav()
+void Publish2Nav::send_data(const Eigen::Vector4d & data, bool observation_available)
 {
-  RCLCPP_INFO(this->get_logger(), "auto_aim_target_pos_publisher node shutting down.");
+  std_msgs::msg::String legacy;
+  legacy.data = std::to_string(data[0]) + "," + std::to_string(data[1]) + "," +
+                std::to_string(data[2]) + "," + std::to_string(data[3]);
+  publisher_->publish(legacy);
+
+  robot_interfaces::msg::VisionTarget2D target;
+  target.header.stamp = now();  // Publication time, never exposure time.
+  // No TF equivalence between Restar gimbal and navigation has been established.
+  target.valid = observation_available && data.allFinite() && data[2] == 1.0 &&
+                 data[3] >= 1.0 && data[3] <= 8.0 && std::floor(data[3]) == data[3];
+  if (target.valid) {
+    target.x = data[0];
+    target.y = data[1];
+    target.target_id = static_cast<int16_t>(data[3]);
+  }
+  // Invalid frames explicitly clear coordinates and ID; never reuse the last observation.
+  target_publisher_->publish(target);
 }
 
-void Publish2Nav::send_data(const Eigen::Vector4d & target_pos)
+void Publish2Nav::send_command(const Command & command, bool output_available)
 {
-  // 创建消息
-  auto message = std::make_shared<std_msgs::msg::String>();
-
-  // 将 Eigen::Vector3d 数据转换为字符串并存储在消息中
-  message->data = std::to_string(target_pos[0]) + "," + std::to_string(target_pos[1]) + "," +
-                  std::to_string(target_pos[2]) + "," + std::to_string(target_pos[3]);
-
-  // 发布消息
-  publisher_->publish(*message);
-
-  // RCLCPP_INFO(
-  //   this->get_logger(), "auto_aim_target_pos_publisher node sent message: '%s'",
-  //   message->data.c_str());
+  robot_interfaces::msg::GimbalCommand msg;
+  msg.header.stamp = now();
+  msg.control_enabled = command.control;
+  const bool finite = std::isfinite(command.yaw) && std::isfinite(command.pitch);
+  msg.valid = output_available && command.control && finite;
+  msg.yaw = finite ? command.yaw : 0.0;
+  msg.pitch = finite ? command.pitch : 0.0;
+  command_publisher_->publish(msg);
 }
 
-void Publish2Nav::start()
-{
-  RCLCPP_INFO(this->get_logger(), "auto_aim_target_pos_publisher node starting to spin...");
-  rclcpp::spin(this->shared_from_this());
-}
-
+void Publish2Nav::start() { rclcpp::spin(shared_from_this()); }
 }  // namespace io

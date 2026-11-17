@@ -139,9 +139,11 @@ bool Decider::armor_filter(std::list<auto_aim::Armor> & armors)
   armors.remove_if([&](const auto_aim::Armor & a) { return a.name == auto_aim::ArmorName::five; });
   // 不打工程
   // armors.remove_if([&](const auto_aim::Armor & a) { return a.name == auto_aim::ArmorName::two; });
-  // 不打前哨站
-  armors.remove_if(
-    [&](const auto_aim::Armor & a) { return a.name == auto_aim::ArmorName::outpost; });
+  // 保留模型类别编号，但不选择基地、前哨站或非装甲目标。
+  armors.remove_if([](const auto_aim::Armor & a) {
+    return a.name == auto_aim::ArmorName::outpost || a.name == auto_aim::ArmorName::base ||
+           a.name == auto_aim::ArmorName::not_armor;
+  });
 
   // 过滤掉刚复活无敌的装甲板
   armors.remove_if([&](const auto_aim::Armor & a) {
@@ -178,6 +180,14 @@ void Decider::sort(std::vector<DetectionResult> & detection_queue)
     dr.armors.sort(
       [](const auto_aim::Armor & a, const auto_aim::Armor & b) { return a.priority < b.priority; });
   }
+
+  // A frame containing only removed classes becomes empty after filtering.
+  // Remove it before the comparator below accesses armors.front().
+  detection_queue.erase(
+    std::remove_if(
+      detection_queue.begin(), detection_queue.end(),
+      [](const DetectionResult & dr) { return dr.armors.empty(); }),
+    detection_queue.end());
 
   // 根据优先级对 DetectionResult 进行排序
   std::sort(

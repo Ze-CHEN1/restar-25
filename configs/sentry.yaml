@@ -70,7 +70,6 @@ baudrate: 921600
 #####-----tracker参数-----#####
 min_detect_count: 5
 max_temp_lost_count: 25
-outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
 yaw_offset: -2 # degree -2.5

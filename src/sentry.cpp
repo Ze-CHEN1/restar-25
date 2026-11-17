@@ -1,6 +1,7 @@
 #include <fmt/core.h>
 
 #include <chrono>
+#include <algorithm>
 #include <nlohmann/json.hpp>
 #include <opencv2/opencv.hpp>
 #include <thread>
@@ -42,7 +43,7 @@ int main(int argc, char * argv[])
   }
   auto config_path = cli.get<std::string>(0);
 
-  io::ROS2 ros2;
+  io::ROS2 ros2(argc, argv);
   io::CBoard cboard(config_path);
   io::Camera camera(config_path);
   io::Camera back_camera("configs/camera.yaml");
@@ -95,12 +96,23 @@ int main(int argc, char * argv[])
     /// 发射逻辑
     command.shoot = shooter.shoot(command, aimer, targets, gimbal_pos);
 
+    // Observe the final result of either aiming branch. This does not send a firing command.
+    ros2.publish_gimbal_command(command);
     cboard.send(command);
 
     /// ROS2通信
-    Eigen::Vector4d target_info = decider.get_target_info(armors, targets);
-
-    ros2.publish(target_info);
+    // get_target_info matches by name, whereas Tracker solves by both name and type.
+    // Do not read coordinates from an armor that was not solved in this cycle.
+    bool observation_available = false;
+    if (!targets.empty()) {
+      auto armor = std::find_if(armors.begin(), armors.end(), [&](const auto & a) {
+        return a.name == targets.front().name;
+      });
+      observation_available = armor != armors.end() && armor->type == targets.front().armor_type;
+    }
+    const Eigen::Vector4d target_info = observation_available
+      ? decider.get_target_info(armors, targets) : Eigen::Vector4d::Zero();
+    ros2.publish_target(target_info, observation_available);
   }
   return 0;
 }

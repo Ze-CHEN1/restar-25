@@ -22,3 +22,6 @@ research/runtime/*
 !research/runtime/.gitkeep
 research/projects/*/artifacts/*
 !research/projects/*/artifacts/.gitkeep
+
+# Hardware-free ROS integration tools.
+/build-ros2/

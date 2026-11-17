@@ -1,0 +1,17 @@
+{
+  "assets/yolo11.xml": "c513dea404aa704d7e4923441b4b51a0f1c3ee54186f5215a04048c297a239c0",
+  "assets/tiny_resnet.onnx": "9f45670da9e61f31b60c12efb08c8a7522ff56cc220c7fa9907283ce7e730179",
+  "assets/yolov8.xml": "4eecaa89fd3ad4e80b3090c59e9261edddc2b9f4df86df2c5d1778451943fe1e",
+  "assets/yolo11_buff_int8.bin": "5e3c4a3562c39d7887f78e628d32850ba74ee6bf1cbf2da576c1c70a8b58f92e",
+  "assets/yolo11_buff_int8.xml": "f0caefcf0fede13c85ae3c597390d7ed1706cc9f8f3e24898a89cdd59fb9dd5a",
+  "assets/standard_fanblade.jpg": "ecf65f523a8ec709e22235998f90b880729fae03d1db42a252f32407d05198c3",
+  "assets/yolo11.bin": "ace99cf0ce36a7ac5deb0d779ef0a15e952a67da9f57f6e16119e093d713963c",
+  "assets/yolov8.bin": "91299dac7405d01e9a1a35c3ee8850f0f3a6775e4c2c9beac1ef2069f222434f",
+  "assets/yolov5.xml": "1cf9f2eb20e0312e8277ec457cfc67fb6867c4ff634d337c9c441a6aea052f8a",
+  "assets/best2-sim.onnx": "0cfa086d050751299f56a8a04dac00869d7e7c5650d37d317fd5d8f38e047ae2",
+  "assets/yolov5.bin": "aeae1db78494b631ddc1420a04714608b5dcf8bdf11f360ce503309757b1a7de",
+  "assets/demo/demo.avi": "20d518e69b917a7d50d4548c628e69083a57aa3c7fb40582aa9e353f569a9d45",
+  "assets/demo/demo.txt": "270cfeb4be6a91809527fd92ea2409ec34e99de1a1f0d661b59a5d4e086f97d1",
+  "/tmp/restar-trim-frozen/configs/sentry.yaml": "39a762f4bc9483b86d07e348a01717d8bcc346e4fbdb723e242c2de0c54d5c6b",
+  "/tmp/restar-trim-frozen/configs/demo.yaml": "0c8483e9d442a0bb626ca267e2284507d3b4961513ef0d317f0ef3ff47ac038b"
+}

@@ -1,5 +1,9 @@
 # 同济大学SuperPower战队25赛季自瞄算法开源
 
+> 当前工作区已按 **2027 高校联盟赛 3V3 哨兵**做第一轮保守裁剪：删除打符算法、入口和测试，以及基地/前哨站专用跟踪、预测、解算和瞄准分支；旧模型输出的这些类别在跟踪/选敌前被过滤，类别与通信编号保持不变。
+> 现有自瞄入口、ROS2、通信、检测方案、两/四装甲模型、全向感知和标定/诊断工具保留。未使用的打符权重和图片暂留，未更换或重写二进制资产；本轮不适配新装甲。Ceres 已不再是本项目构建依赖。
+> 当前范围、基线与验证见 [裁剪项目记录](research/projects/trim-2027-rmul/README.md)，无硬件回归见 [测试说明](tests/rmul_trim/README.md)。后文性能/比赛结果属于上游 2025 版本，不能作为本裁剪版或 2027 适配效果的证据。
+
 ## 本项目亮点
 - 无ROS依赖*，新同学无需学习ROS相关知识就能上手自瞄。
 - 完整工作流，包含开发、编译、调试、部署全流程。
@@ -57,7 +61,6 @@ IMU型号：使用C板内置BMI088作为IMU\
 1. 安装依赖项：
    - [MindVision SDK](https://mindvision.com.cn/category/software/sdk-installation-package/)或[HikRobot SDK](https://www.hikrobotics.com/cn2/source/support/software/MVS_STD_GML_V2.1.2_231116.zip)
    - [OpenVINO](https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html)
-   - [Ceres](http://ceres-solver.org/installation.html)
    - 其余：
     ```bash
     sudo apt install -y \
@@ -201,13 +204,10 @@ sp_vision_25
 ├── tasks          // 功能层，见3.4软件架构
 │   ├── auto_aim       // 自瞄相关算法实现
 │   │   └── ...
-│   ├── auto_buff      // 打符相关算法实现
-│   │   └── ...
 │   └── omniperception // 全向感知相关算法实现
 │   │   └── ...
 ├── tests
 │   ├── auto_aim_test.cpp         // 自瞄录制视频测试程序
-│   ├── auto_buff_test.cpp        // 打符录制视频测试程序
 │   ├── camera_detect_test.cpp    // 识别器测试程序（工业相机）
 │   ├── camera_test.cpp           // 相机测试程序
 │   ├── camera_thread_test.cpp    // 相机线程测试程序
@@ -346,4 +346,3 @@ DPS = 单位时间射击窗口占比 \times 射频 \times 单发子弹伤害
 
 ## 项目成员
 王骁扬、杨佳轩、奚睿豪、俞选涛、吴圳楠、杨瑞灵、程翔宇
-

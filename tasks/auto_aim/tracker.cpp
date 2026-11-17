@@ -9,6 +9,16 @@
 
 namespace auto_aim
 {
+namespace
+{
+bool unsupported_armor(const Armor & armor)
+{
+  // Keep model/protocol class IDs unchanged; only robot targets may be tracked.
+  return armor.name == ArmorName::outpost || armor.name == ArmorName::base ||
+         armor.name == ArmorName::not_armor;
+}
+}  // namespace
+
 Tracker::Tracker(const std::string & config_path, Solver & solver)
 : solver_{solver},
   detect_count_(0),
@@ -22,8 +32,6 @@ Tracker::Tracker(const std::string & config_path, Solver & solver)
   enemy_color_ = (yaml["enemy_color"].as<std::string>() == "red") ? Color::red : Color::blue;
   min_detect_count_ = yaml["min_detect_count"].as<int>();
   max_temp_lost_count_ = yaml["max_temp_lost_count"].as<int>();
-  outpost_max_temp_lost_count_ = yaml["outpost_max_temp_lost_count"].as<int>();
-  normal_temp_lost_count_ = max_temp_lost_count_;
 }
 
 std::string Tracker::state() const { return state_; }
@@ -42,12 +50,7 @@ std::list<Target> Tracker::track(
   // 过滤掉非我方装甲板
   armors.remove_if([&](const auto_aim::Armor & a) { return a.color != enemy_color_; });
 
-  // 过滤前哨站顶部装甲板
-  // armors.remove_if([this](const auto_aim::Armor & a) {
-  //   return a.name == ArmorName::outpost &&
-  //          solver_.oupost_reprojection_error(a, 27.5 * CV_PI / 180.0) <
-  //            solver_.oupost_reprojection_error(a, -15 * CV_PI / 180.0);
-  // });
+  armors.remove_if(unsupported_armor);
 
   // 优先选择靠近图像中心的装甲板
   armors.sort([](const Armor & a, const Armor & b) {
@@ -103,7 +106,9 @@ std::tuple<omniperception::DetectionResult, std::list<Target>> Tracker::track(
   omniperception::DetectionResult temp_target{std::list<Armor>(), t, 0, 0};
   if (!detection_queue.empty()) {
     temp_target = detection_queue.front();
+    temp_target.armors.remove_if(unsupported_armor);
   }
+  armors.remove_if(unsupported_armor);
 
   auto dt = tools::delta_time(t, last_timestamp_);
   last_timestamp_ = t;
@@ -217,12 +222,6 @@ void Tracker::state_machine(bool found)
       state_ = "tracking";
     } else {
       temp_lost_count_++;
-      if (target_.name == ArmorName::outpost)
-        //前哨站的temp_lost_count需要设置的大一些
-        max_temp_lost_count_ = outpost_max_temp_lost_count_;
-      else
-        max_temp_lost_count_ = normal_temp_lost_count_;
-
       if (temp_lost_count_ > max_temp_lost_count_) state_ = "lost";
     }
   }
@@ -243,16 +242,6 @@ bool Tracker::set_target(std::list<Armor> & armors, std::chrono::steady_clock::t
   if (is_balance) {
     Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1, 1, 1}};
     target_ = Target(armor, t, 0.2, 2, P0_dig);
-  }
-
-  else if (armor.name == ArmorName::outpost) {
-    Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 81, 0.4, 100, 1e-4, 0, 0}};
-    target_ = Target(armor, t, 0.2765, 3, P0_dig);
-  }
-
-  else if (armor.name == ArmorName::base) {
-    Eigen::VectorXd P0_dig{{1, 64, 1, 64, 1, 64, 0.4, 100, 1e-4, 0, 0}};
-    target_ = Target(armor, t, 0.3205, 3, P0_dig);
   }
 
   else {

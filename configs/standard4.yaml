@@ -35,7 +35,6 @@ min_confidence: 0.8
 #####-----tracker参数-----#####
 min_detect_count: 5
 max_temp_lost_count: 15
-outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
 yaw_offset: -2 # degree -2.5
@@ -90,10 +89,3 @@ R_yaw: [1]
 max_pitch_acc: 100
 Q_pitch: [9e6,0]
 R_pitch: [1]
-
-#####-----buff_detector参数-----#####
-model: "assets/yolo11_buff_int8.xml"
-
-#####-----buff_aimer参数-----#####
-fire_gap_time: 0.520   # s
-predict_time: 0.100     # s

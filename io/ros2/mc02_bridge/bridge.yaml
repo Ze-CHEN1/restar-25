@@ -1,0 +1,25 @@
+mc02_serial_bridge:
+  ros__parameters:
+    nav_topic: cmd_vel
+    gimbal_topic: vision/gimbal_cmd
+    target_topic: vision/target
+    frame_topic: bridge/frame
+    frame_rate_hz: 50.0
+    nav_timeout_ms: 200.0
+    gimbal_timeout_ms: 200.0
+    target_timeout_ms: 500.0
+    future_tolerance_ms: 50.0
+    nav_reliability: best_effort
+    gimbal_reliability: reliable
+    target_reliability: best_effort
+    subscribe_target: true
+    transport: mock
+    serial_device: /dev/ttyACM0
+    serial_motion_enabled: false
+    serial_reconnect_ms: 250
+    serial_write_timeout_ms: 50
+
+mc02_mock_receiver:
+  ros__parameters:
+    frame_topic: bridge/frame
+    output_file: ''

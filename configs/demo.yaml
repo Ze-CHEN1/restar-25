@@ -35,7 +35,6 @@ min_confidence: 0.8
 #####-----tracker参数-----#####
 min_detect_count: 5
 max_temp_lost_count: 15
-outpost_max_temp_lost_count: 75
 
 #####-----aimer参数-----#####
 yaw_offset: -1 # degree -2.5
@@ -89,33 +88,3 @@ R_yaw: [1]
 max_pitch_acc: 100
 Q_pitch: [9e6,0]
 R_pitch: [1]
-
-#####-----buff_detector参数-----#####
-detect:
-  contrast: 1
-  brightness: 
-    blue: -120
-    red: -100
-  brightness_threshold:
-    blue: 120
-    red: 40
-  morphology_size:
-    blue: 3
-    red: 3
-  dilate_size: 2
-  # canny_low_threshold: 100
-  # canny_high_threshold: 180
-  # approx_epsilon: 1.0
-  R_contours_min_area: 200
-  R_contours_max_area: 600
-  fanblades_head_contours_min_area: 3000
-  fanblades_head_contours_max_area: 8000
-  fanblades_body_contours_min_area: 1000
-  fanblades_body_contours_max_area: 4000
-  standard_fanblade_path: ./assets/standard_fanblade.jpg
-
-#####-----buff_aimer参数-----#####
-aim_time: 0.150         # s
-wait_time: 0.300        # s
-command_fire_gap: 0.080 # s
-predict_time: 0.150     # s
