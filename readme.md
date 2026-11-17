@@ -1,348 +1,975 @@
-# 同济大学SuperPower战队25赛季自瞄算法开源
+# Restar Vision 2025
 
-> 当前工作区已按 **2027 高校联盟赛 3V3 哨兵**做第一轮保守裁剪：删除打符算法、入口和测试，以及基地/前哨站专用跟踪、预测、解算和瞄准分支；旧模型输出的这些类别在跟踪/选敌前被过滤，类别与通信编号保持不变。
-> 现有自瞄入口、ROS2、通信、检测方案、两/四装甲模型、全向感知和标定/诊断工具保留。未使用的打符权重和图片暂留，未更换或重写二进制资产；本轮不适配新装甲。Ceres 已不再是本项目构建依赖。
-> 当前范围、基线与验证见 [裁剪项目记录](research/projects/trim-2027-rmul/README.md)，无硬件回归见 [测试说明](tests/rmul_trim/README.md)。后文性能/比赛结果属于上游 2025 版本，不能作为本裁剪版或 2027 适配效果的证据。
+### RoboMaster 机器人视觉自瞄与 ROS2 通信系统
 
-## 本项目亮点
-- 无ROS依赖*，新同学无需学习ROS相关知识就能上手自瞄。
-- 完整工作流，包含开发、编译、调试、部署全流程。
-- 模块化架构，包含各模块的功能说明、代码实现、以及独立的测试程序。
-- 仓库内置可恢复的视觉研究 Agent，支持任务冻结、假设与实验台账、受控代码修改和分层验收，使用方法见[视觉研究 Agent 手册](docs/vision-research-agent.md)。
-- 我们提出了“轨迹视角下的自瞄理论”，并据此设计了“自瞄轨迹规划算法”。相比传统自瞄决策算法，该算法实现更简洁、调试更方便、效果更好，击杀时间仅需10s（300HP，14rad/s，2m）。该理论也为后续自瞄技术的改进提供了方向。
+![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04-E95420?logo=ubuntu\&logoColor=white)
+![C++](https://img.shields.io/badge/C++-17-00599C?logo=cplusplus\&logoColor=white)
+![OpenCV](https://img.shields.io/badge/OpenCV-4.5.4-5C3EE8?logo=opencv\&logoColor=white)
+![OpenVINO](https://img.shields.io/badge/OpenVINO-2024.6-0071C5)
+![ROS2](https://img.shields.io/badge/ROS2-Humble-22314E?logo=ros)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-*为实现哨兵“追击”功能，本项目预留了与导航通信的ROS接口。
+## 📖 项目简介
 
+**Restar Vision 2025** 是一套面向 RoboMaster 机器人竞赛的视觉感知、目标跟踪与云台控制系统，主要应用于哨兵机器人及其他具备自动瞄准需求的机器人平台。
 
-## 1 功能介绍
-自瞄的定义和意义。我们对自瞄的定义为“针对移动装甲板目标的自动瞄准和自动火控软件”。当操作手切换成自瞄模式后，自瞄会接管云台的控制权，通过对敌方运动轨迹的预测和弹道解算，控制云台进行追踪；同时，自瞄还会接管发射机构的控制权，判断开火时机。自瞄的意义在于提高我方作战能力，实现短击杀时间、高命中率的作战效果。 
+项目基于 C++17 开发，以 OpenCV、OpenVINO、Eigen 和 ROS2 为核心技术栈，构建了从图像采集、装甲板识别、目标定位、运动状态估计到云台控制的完整处理流程。
 
-自瞄的模块组成。经过多年的发展，大部份参赛队伍都具备了自瞄的能力。通过和一些队伍的交流，目前各队的自瞄类似于如图1.1所示的模块划分。装甲板识别器和目标状态估计器作为“感知模块”，提供敌方运动信息。决策器根据上述信息，进行瞄准位置的计算和开火判断，并最终交由控制器进行执行。
-![自瞄模块划分](https://github.com/user-attachments/assets/0e3e960e-0bf0-430a-95f5-d0803d1a6ade)
-图1.1 自瞄模块划分 
+在视觉算法方面，系统支持 YOLO 系列神经网络模型进行装甲板检测，结合 PnP 位姿解算、扩展卡尔曼滤波（EKF）、目标运动预测及弹道补偿，实现对动态目标的持续跟踪与瞄准。
 
-自瞄是分布式软件。识别器、估计器、决策器由于算法较为复杂，一般运行在算力较高的小电脑上；出于对实时性和稳定性的考量，控制器一般运行在嵌入式单片机上。模块划分解耦了视觉组和电控组的职责，明确了分工，提高了开发效率。
+在系统集成方面，项目采用模块化设计，提供 ROS2 通信接口、导航与视觉信息交互、MC02 串口通信桥接，以及面向无硬件环境的 Mock 测试与录像回放功能，便于算法开发、系统联调和机器人平台部署。
 
-本项目包含了本队自瞄相关的视觉组部分的全部代码，包括但不限于：多线程相机驱动程序、电控通信协议和具体实现、图像-四元数对齐算法、相机内参标定和手眼标定程序、装甲板识别算法（含传统、神经网络多种实现）、装甲板位姿解算、坐标变换和yaw优化算法、基于拓展卡尔曼的整车估计器、瞄准位置和开火决策逻辑、以及各模块独立测试程序等。
+### ✨ 项目特性
 
-本项目建立在往年[sp_vision_23](https://github.com/TongjiSuperPower/sp_vision_23)、[sp_vision_24](https://github.com/TongjiSuperPower/sp_vision_24)项目的基础之上。其中，sp_vision_23完全基于Python开发，跑通了自瞄从识别到射击的完整流程，因其运行效率不佳（在导航运行时，帧率仅60FPS），sp_vision_24采用C++重写（帧率约100FPS），并且具备参数文件加载、日志记录、离线检测与重启、类似rosbag（时间戳+视频+四元数）录制等辅助功能，以及各个模块的独立测试程序，实现“赛前问题排查、赛后问题重现”的能力，保证了自瞄的可靠性和稳定性。
+* **高性能视觉检测**：支持 YOLOv5、YOLOv8、YOLO11 等目标检测模型，使用 OpenVINO 进行推理加速。
+* **目标定位与跟踪**：利用 PnP 解算目标空间位置，结合 EKF 估计运动状态，实现连续目标跟踪。
+* **目标运动预测**：基于目标运动模型预测未来位置，结合弹道模型计算云台瞄准角度。
+* **ROI 区域检测**：支持指定感兴趣区域进行图像检测，减少不必要的图像处理区域。
+* **ROS2 通信集成**：通过结构化 ROS2 消息发布目标状态和云台控制指令，实现视觉模块与其他机器人模块的信息交互。
+* **导航与云台桥接**：通过 MC02 二进制通信协议汇总导航速度与云台控制数据，实现上位机与下位机之间的数据交互。
+* **离线回放调试**：支持使用视频和姿态数据运行视觉算法，无需连接真实相机或机器人硬件。
+* **模块化与可测试性**：提供独立通信工具、Mock 节点、协议测试和串口测试，便于分模块调试和验证。
 
-本项目在上述基础上改进了识别器和决策器。其中，识别器由传统的图像处理方案更换为其它战队开源的基于神经网络的四点检测模型[1,2]，以期提高识别器的召回能力。而决策器则由基于经验主义的分段决策逻辑改为基于轨迹优化的规划器，简化代码的同时，实现了更优的云台控制效果和开火决策逻辑，其思路会在后文详细介绍。
+---
 
+## 🏗️ 系统架构
 
-## 2 效果展示
-轨迹跟随效果。本项目创新性采用“自瞄轨迹规划算法”，降低控制难度的同时，提升轨迹跟随效果。如图2.1所示，跟随单块装甲板时，稳态误差小于0.01rad，装甲板切换时，具备提前减速的能力。
-![轨迹跟随效果](https://github.com/user-attachments/assets/ac65ab13-bc2c-45c0-9c06-613442fc104d)
-图2.1 轨迹跟随效果（5rad/s，3m）
+系统主要由视觉感知、目标状态估计、瞄准控制、ROS2 通信和底层硬件通信五部分组成。
 
-调试场景演示。本项目容易上手，对新人友好。如视频2.1所示，我们通过无线局域网或插网线方式，使用NoMachine远程桌面软件连接机器人搭载的小电脑，配合PlotJuggler曲线图绘制软件，显示调试时常用的数据信息，如云台yaw关节执行情况、开火决策、击打目标的角速度等。
+```mermaid
+flowchart TD
+    A["Camera / Video Input"] --> B["YOLO Armor Detection"]
+    B --> C["PnP Pose Estimation"]
+    C --> D["EKF Target Tracking"]
+    D --> E["Motion Prediction"]
+    E --> F["Aiming & Ballistics"]
 
-https://github.com/user-attachments/assets/606c2907-2f11-4392-b3fe-7ee4b7b6fd29
+    F --> G["Gimbal Control"]
+    F --> H["ROS2 Vision Interface"]
 
-视频2.1 调试场景演示
+    H --> I["Vision Target"]
+    H --> J["Gimbal Command"]
 
-量化指标统计。如图2.2所示，在25赛季国赛赛场上，搭载本算法的3、4号步兵的最高命中率为39.6%，发挥正常时，命中率不低于30%。除了命中率，我们还统计了击杀时间，面对2m处300血的敌方步兵，7rad/s转速下耗时约8s，14rad/s转速下耗时约10s。
-![国赛MVP结算数据](https://github.com/user-attachments/assets/4e17085d-3bc8-422e-b0df-b0fbe6e4c934)
-图2.2 国赛MVP结算数据
+    K["Navigation cmd_vel"] --> L["MC02 Bridge"]
+    I --> L
+    J --> L
 
-
-## 3 详细信息
-### 3.1 项目环境
-操作系统：Ubuntu 22.04\
-运算平台：NUC12WSKI7（i7-1260P，16GB）\
-相机型号：海康MV-CS016-10UC\
-镜头型号：海康官方6mm镜头\
-下位机型号：RoboMaster开发板C型（STM32F407）\
-IMU型号：使用C板内置BMI088作为IMU\
-通信方式：USB2CAN（旧）、MicroUSB虚拟串口（新）\
-辅助工具：NoMachine（远程桌面）、PlotJuggler（绘制曲线图）
-
-### 3.2 编译方式
-1. 安装依赖项：
-   - [MindVision SDK](https://mindvision.com.cn/category/software/sdk-installation-package/)或[HikRobot SDK](https://www.hikrobotics.com/cn2/source/support/software/MVS_STD_GML_V2.1.2_231116.zip)
-   - [OpenVINO](https://docs.openvino.ai/2024/get-started/install-openvino/install-openvino-archive-linux.html)
-   - 其余：
-    ```bash
-    sudo apt install -y \
-        git \
-        g++ \
-        cmake \
-        can-utils \
-        libopencv-dev \
-        libfmt-dev \
-        libeigen3-dev \
-        libspdlog-dev \
-        libyaml-cpp-dev \
-        libusb-1.0-0-dev \
-        nlohmann-json3-dev \
-        openssh-server \
-        screen
-    ```
-
-2. 编译：
-    ```bash
-    cmake -B build
-    make -C build/ -j`nproc`
-    ```
-
-3. 运行demo:
-    ```bash
-    ./build/auto_aim_test
-    ```
-
-4. 注册自启：
-    1. 确保已安装`screen`:
-        ```
-        sudo apt install screen
-        ```
-    2. 创建`.desktop`文件:
-        ```
-        mkdir ~/.config/autostart/
-        touch ~/.config/autostart/sp_vision.desktop
-        ```
-    3. 在该文件中写入:
-        ```
-        [Desktop Entry]
-        Type=Application
-        Exec=/home/rm/Desktop/sp_vision_25/autostart.sh
-        Name=sp_vision
-        ```
-        注: [Exec](https://specifications.freedesktop.org/desktop-entry-spec/desktop-entry-spec-latest.html)必须为绝对路径.
-    4. 确保`autostart.sh`有可执行权限:
-        ```
-        chmod +x autostart.sh
-        ```
-
-5. USB2CAN设置（可选）
-    1. 创建`.rules`文件:
-        ```
-        sudo touch /etc/udev/rules.d/99-can-up.rules
-        ```
-    2. 在该文件中写入:
-        ```
-        ACTION=="add", KERNEL=="can0", RUN+="/sbin/ip link set can0 up type can bitrate 1000000"
-        ACTION=="add", KERNEL=="can1", RUN+="/sbin/ip link set can1 up type can bitrate 1000000"
-
-6. 使用GPU推理（可选）
-    ```
-    mkdir neo  
-    cd neo  
-
-    wget https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.13463.18/intel-igc-core_1.0.13463.18_amd64.deb  
-    wget https://github.com/intel/intel-graphics-compiler/releases/download/igc-1.0.13463.18/intel-igc-opencl_1.0.13463.18_amd64.deb  
-    wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/intel-level-zero-gpu-dbgsym_1.3.25812.14_amd64.ddeb  
-    wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/intel-level-zero-gpu_1.3.25812.14_amd64.deb  
-    wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/intel-opencl-icd-dbgsym_23.09.25812.14_amd64.ddeb  
-    wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/intel-opencl-icd_23.09.25812.14_amd64.deb  
-    wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/libigdgmm12_22.3.0_amd64.deb  
-    wget https://github.com/intel/compute-runtime/releases/download/23.09.25812.14/ww09.sum  
-
-    sha256sum -c ww09.sum  
-    sudo dpkg -i *.deb  
-    ```
-    注：如果使用 GPU 异步推理（async-infer），最高显示分辨率限制为 1920×1080 (24Hz)
-
-7. 串口设置
-    1. 授予权限
-        ```
-        sudo usermod -a -G dialout $USER
-        ```
-    2. 获取端口 ID（serial, idVendor, idProduct）
-        ```
-        udevadm info -a -n /dev/ttyACM0 | grep -E '({serial}|{idVendor}|{idProduct})'
-        ```
-        将 /dev/ttyACM0 替换为实际设备名。
-    3. 创建 udev 规则文件
-        ```
-        sudo touch /etc/udev/rules.d/99-usb-serial.rules
-        ```
-        然后在文件中写入如下内容（用真实 ID 替换示例，SYMLINK 是规则应用后固定的串口名）：
-        ```
-        SUBSYSTEM=="tty", ATTRS{idVendor}=="1234", ATTRS{idProduct}=="1234", ATTRS{serial}=="A1234567", SYMLINK+="gimbal"
-        ```
-    4. 重新加载 udev 规则
-        ```
-        sudo udevadm control --reload-rules
-        sudo udevadm trigger
-        ```
-    5. 检查结果
-        ```
-        ls -l /dev/gimbal
-        # Expected output (example):
-        # lrwxrwxrwx 1 root root 7 Jul 21 10:00 /dev/gimbal -> ttyACM0
-        ```
-
-### 3.3 数据流图
-视觉相关模块如图3.1所示。其中，相机线程产生图像、时间戳，通过下位机线程获取对应的云台姿态四元数；图像经过识别器，获得装甲板的四个顶点像素坐标，以及其图案类别；估计器根据装甲板信息，获得目标单位的运动状态；决策器则根据当前的目标运动状态信息，预测目标的运动轨迹，从而判断最佳瞄准位置和最佳开火时机，形成指令发送给下位机；最后控制器和执行机构则根据该指令进行执行，从而完成一个完整的自瞄流程。
-![数据流图](https://github.com/user-attachments/assets/b89ce42f-a769-49c5-b82a-d69aeac02925)
-图3.1 数据流图
-
-### 3.4 软件架构
-各兵种需要实现的功能往往有多个，但是每个功能不能作为独立的程序。例如步兵需要自瞄和打符，显然，这两个功能都需要从相机获取图像，但是相机只能被一个程序打开，这会导致另一个程序无法正常工作（相机被占用）。
-
-为了解决这个问题，我们提出了视觉框架（sp_vision）：自瞄、打符等功能，被拆解为该框架下的一个个功能组，每个功能组包含多个类或函数（如识别器、解算器、预测器等等）；而运行的程序（main函数）只有一个，它负责从相机获取图像，再根据电控发来的信号（自瞄档or打符档），选择对应的功能组执行，不同兵种的执行逻辑各不相同，即不同的main函数。此外，为了方便大家合作开发，视觉框架还提供了许多常用的工具函数，减少因重复造轮子所导致的出错概率和时间成本。本框架的组成如图3.2所示。
-![软件架构](https://github.com/user-attachments/assets/2603a3b3-ae1d-4fa8-afbb-490efde30d77)
-图3.2 软件架构
-
-### 3.5 文件结构
+    L --> M["MC02 Serial Protocol"]
+    L --> N["Mock Frame / Diagnostics"]
 ```
-sp_vision_25
-├── assets         // 包含demo素材、网络权重等
-│   └── ...
-├── calibration    // 标定相关程序
-│   ├── calibrate_camera.cpp             // 相机内参标定程序
-│   ├── calibrate_handeye.cpp            // 手眼标定程序
-│   ├── calibrate_robotworld_handeye.cpp // 手眼标定程序（同时计算标定板位置）
-│   └── capture.cpp                      // 相机标定数据采集程序
-├── CMakeLists.txt // CMake配置文件
-├── configs        // 每台机器人的YAML配置文件
-│   └── ...
-├── io             // 硬件抽象层，见3.4软件架构
-│   └── ...
-├── src            // 应用层，见3.4软件架构
-│   └── ...
-├── tasks          // 功能层，见3.4软件架构
-│   ├── auto_aim       // 自瞄相关算法实现
-│   │   └── ...
-│   └── omniperception // 全向感知相关算法实现
-│   │   └── ...
-├── tests
-│   ├── auto_aim_test.cpp         // 自瞄录制视频测试程序
-│   ├── camera_detect_test.cpp    // 识别器测试程序（工业相机）
-│   ├── camera_test.cpp           // 相机测试程序
-│   ├── camera_thread_test.cpp    // 相机线程测试程序
-│   ├── cboard_test.cpp           // C板测试程序
-│   ├── detector_video_test.cpp   // 识别器测试程序（视频）
-│   ├── dm_test.cpp               // 达妙IMU测试程序
-│   ├── fire_test.cpp             // 开火测试程序
-│   ├── gimbal_response_test.cpp  // 云台响应测试程序
-│   ├── gimbal_test.cpp           // 云台通信测试程序
-│   ├── handeye_test.cpp          // 手眼标定测试程序
-│   ├── minimum_vision_system.cpp // 最小视觉系统测试程序
-│   ├── multi_usbcamera_test.cpp  // 多USB摄像头测试程序
-│   ├── planner_test_offline.cpp  // 规划器测试程序（离线）
-│   ├── planner_test.cpp          // 规划器测试程序（实车）
-│   ├── publish_test.cpp          // ROS发送测试程序
-│   ├── subscribe_test.cpp        // ROS接收测试程序
-│   ├── topic_loop_test.cpp       // ROS话题循环测试程序
-│   ├── usbcamera_detect_test.cpp // 识别器测试程序（USB相机）
-│   ├── usbcamera_test.cpp        // USB相机测试程序
-│   └── ...
-└── tools          // 工具层，见3.4软件架构
-    ├── crc.hpp                    // CRC校验
-    ├── exiter.hpp                 // 退出检测
-    ├── extended_kalman_filter.hpp // 扩展卡尔曼滤波器
-    ├── img_tools.hpp              // 图像处理工具
-    ├── logger.hpp                 // 日志记录器
-    ├── math_tools.hpp             // 数学工具
-    ├── plotter.hpp                // 曲线图绘制工具
-    ├── recorder.hpp               // 视频录制器
-    ├── thread_safe_queue.hpp      // 线程安全队列
-    ├── trajectory.hpp             // 弹道解算
-    ├── yaml.hpp                   // YAML配置文件解析器
-    └── ...
-```    
 
+### 1. 视觉感知模块
 
-## 4 轨迹视角下的自瞄理论
-### 4.1 引言
-在自瞄的研发和测试过程中，我们发现决策器和控制器是目前的短板。
+负责从工业相机或视频文件中获取图像，使用神经网络检测装甲板目标，并提取目标关键点信息。
 
-决策器实现繁琐。不同兵种、不同敌方移动状态（平移、低速小陀螺、高速小陀螺）需要不同的“自瞄行为”，例如：英雄只瞄准旋转中心位置，根据时间误差判断是否开火；平移和低速时，步兵的瞄准位置则持续跟随敌方装甲板移动，同时依据位置误差判断是否开火，而高速时则退化为类似英雄的情况。不同的自瞄行为需要不同的代码实现，而且需要设计不同的判断条件，这一方面提高了代码维护的成本，另一方面也引入额外参数，增大了调试的负担。
+主要功能包括：
 
-控制调参困难。传统控制指标的输入一般为阶跃或斜坡函数，而自瞄控制器的输入更类似于三角波，且周期和幅值随敌方运动状态变化而变化，我们无法找到合适的理论将二者联系起来，因此调参过程中更依赖于经验猜测而不是理论指导。此外，我们无法判断云台的控制效果上限在哪里，甚至对于其影响因素都缺乏充分的认识。这导致电控调参十分“坐牢”，调试一台机器人需要消耗大量时间和资源，并且调试后的机器人表现效果参差不齐。
+* 工业相机图像采集；
+* YOLO 装甲板识别；
+* ROI 区域检测；
+* 目标置信度筛选；
+* 检测结果可视化。
 
-因此，我们希望能够找到一个“理论”，统一不同决策逻辑、精简代码，同时提高我们对于自瞄以及控制的认识，指导我们更加高效、可靠地调试自瞄，最终提高整体的自瞄效果。
+### 2. 目标定位与跟踪模块
 
-### 4.2 前置概念
-命中率。命中率越高，意味着所发射的子弹中命中装甲板的数量越多，造成的伤害越高，是用来衡量自瞄效果最常见的指标。然而，“不谈射频的命中率是没有意义的”[3]，因为如果自瞄只在最有把握的时候射击，只要时间足够长，早晚能打死对面，所以除了命中率还需要考虑击杀时间。
+利用相机标定参数和检测结果计算目标空间位置，并通过滤波算法估计目标运动状态。
 
-击杀时间。击杀时间衡量了打死敌方单位所需的时间，是衡量自瞄好坏的“金标准”：一方面，装甲板击打检测和发射机构射频均存在上限，杜绝了依靠超高射频刷击杀时间的可行性；另一方面，该指标便于测量，仅需要秒表和靶机即可，比赛时也可以通过回放视频来快速估算。在测量该指标时，需要控制敌方血量、距离和运动状态等变量，这样才能保证时间的可比较性。
+主要功能包括：
 
-目标运动状态。目标运动状态由估计器计算得出，用于决策器预测目标在一段时间后的位置。目前主流的估计算法为基于扩展卡尔曼滤波的整车估计器[3,4]，其定义的目标运动状态包括目标旋转中心位置、速度、yaw旋转角度、yaw旋转角速度、各装甲板半径和高度差，根据这些信息，决策器可以计算出每个装甲板的位置，并在其中选择击打目标。为了方便后续的论述，这里有两点假设：假设一，估计器是完美的，无需考虑估计导致的误差；假设二，目标处于匀速运动状态，从而无需考虑预测时因目标变速导致的误差。上述两点假设简化了自瞄使用场景的复杂性，帮助我们专注于决策器的改进。
+* PnP 位姿解算；
+* 目标坐标计算；
+* EKF 状态估计；
+* 目标匹配与跟踪；
+* 运动状态预测。
 
-目标轨迹和云台轨迹。已知目标运动状态，根据匀速运动公式，可以计算任意时刻t下目标各装甲板位置，选择距离云台最近的装甲板，计算其相对于云台的方位角yaw，得到函数yaw_target(t)，记为目标轨迹。由于pitch计算方式类似，这里的“轨迹”只讨论yaw。云台轨迹同理，代表对应时刻云台相对于初始位置所呈的夹角yaw，记为yaw_gimbal(t)。
+### 3. 瞄准控制模块
 
-射击轨迹。子弹出膛后需经过子弹飞行时间t_fly后到达装甲板，将目标轨迹提前t_fly可获得射击轨迹，即：
-```math
-yaw_{shoot}(t) = yaw_{target}(t + t_{fly})
+根据目标位置和运动预测结果计算瞄准角度，并结合云台状态与弹道模型进行控制补偿。
+
+主要功能包括：
+
+* 目标未来位置预测；
+* 弹道补偿；
+* 云台 Yaw / Pitch 角度计算；
+* 云台运动控制；
+* 目标丢失处理。
+
+### 4. ROS2 通信模块
+
+使用 ROS2 实现视觉系统与导航、决策和控制模块之间的数据交互。
+
+通信模块支持：
+
+* 目标位置信息发布；
+* 云台控制指令发布；
+* 敌方机器人状态订阅；
+* 目标选择信息订阅；
+* 输入数据有效性检查；
+* 消息超时处理；
+* ROS2 节点生命周期管理。
+
+### 5. MC02 通信模块
+
+将 ROS2 中的导航速度和云台控制数据转换为 MC02 二进制协议帧，通过串口发送至下位机。
+
+支持：
+
+* 导航速度信息编码；
+* 云台角度指令编码；
+* CRC16 校验；
+* 串口通信；
+* 超时与失效处理；
+* 断线重连；
+* Mock 数据发布与接收；
+* 通信状态诊断。
+
+---
+
+## 🧠 视觉算法
+
+### 装甲板检测
+
+项目采用 YOLO 系列目标检测模型，结合 OpenVINO 推理框架实现装甲板检测。
+
+支持的模型包括：
+
+* YOLOv5
+* YOLOv8
+* YOLO11
+
+检测过程主要包括图像预处理、网络推理、检测结果解析及目标筛选。
+
+通过配置文件可以调整模型路径、推理设备和置信度阈值等参数。
+
+### ROI 区域检测
+
+系统提供 `detect_with_roi(...)` 接口，可以针对指定图像区域执行检测。
+
+ROI 功能适用于目标已经被定位或预测的场景，通过缩小检测范围减少无关区域的计算量。
+
+相关配置示例：
+
+```yaml
+roi:
+  x: 420
+  y: 50
+  width: 600
+  height: 600
+
+use_roi: false
 ```
-如果t时刻云台角度yaw_gimbal和对应的射击角度yaw_shoot满足一定的误差范围（半个装甲板），则此时从枪管射出的子弹会命中装甲板。更进一步，如果云台轨迹和射击轨迹重合，则任意时刻从枪管射出的子弹均会命中装甲板，“子弹发射如水流一样”[3]。如图4.1所示，射击轨迹的瞄准位置是14ms后目标轨迹的位置。
-![轨迹示意图](https://github.com/user-attachments/assets/80019e43-8cdc-47d1-98cd-dd8ae3d5e20b)
-图4.1 轨迹示意图
 
-### 4.3 什么是好自瞄
-在轨迹视角下，“云台轨迹”和“射击轨迹”重合度越高，击杀时间越短。击杀时间反映了DPS（Damage Per Second），公式如下：
-```math
-击杀时间 = \frac{血量}{DPS}
+其中：
+
+* `x`、`y`：ROI 左上角坐标；
+* `width`、`height`：ROI 的宽度和高度；
+* `use_roi`：静态 ROI 开关。
+
+动态 ROI 的使用方式取决于具体视觉程序入口及调用逻辑。
+
+### PnP 位姿解算
+
+根据装甲板图像关键点、目标实际尺寸及相机内参，通过 PnP 算法求解目标相对于相机的空间位姿。
+
+解算结果用于目标跟踪、运动预测和云台瞄准。
+
+### EKF 目标跟踪
+
+利用扩展卡尔曼滤波器估计目标运动状态，并结合连续观测实现目标跟踪。
+
+跟踪器负责维护目标状态，在目标短时丢失或观测不稳定时提供状态预测。
+
+### 运动预测与弹道补偿
+
+根据目标运动状态、弹丸速度和几何关系，计算云台所需的瞄准角度。
+
+系统包含目标预测、瞄准求解和弹道相关模块，不同机器人程序入口可以使用相应的控制流程。
+
+---
+
+## 🔌 ROS2 通信接口
+
+ROS2 通信模块用于连接视觉系统、导航模块和下位机控制系统。
+
+### 1. 视觉信息发布
+
+| Topic                  | Message Type                          | 说明            |
+| ---------------------- | ------------------------------------- | ------------- |
+| `/vision/target`       | `robot_interfaces/msg/VisionTarget2D` | 目标位置及有效性状态    |
+| `/vision/gimbal_cmd`   | `robot_interfaces/msg/GimbalCommand`  | 云台控制指令        |
+| `/auto_aim_target_pos` | `std_msgs/msg/String`                 | 字符串格式目标信息兼容接口 |
+
+以上为默认话题名称，实际名称可能受 ROS2 namespace 和 remapping 配置影响。
+
+#### `/vision/target`
+
+用于发布视觉系统计算得到的目标观测信息。
+
+消息包含：
+
+* `header`：消息时间戳；
+* `valid`：目标是否有效；
+* `target_id`：目标标识；
+* `x`、`y`：目标相关坐标数据。
+
+目标无效时，发布器会对相应目标信息进行清理，避免其他模块误用历史数据。
+
+目标坐标基于视觉解算结果，**不应在未经坐标转换的情况下直接作为导航地图坐标使用**。
+
+#### `/vision/gimbal_cmd`
+
+用于发布云台角度控制指令。
+
+主要字段：
+
+* `valid`：指令是否有效；
+* `control_enabled`：是否允许控制；
+* `yaw`：云台偏航角指令；
+* `pitch`：云台俯仰角指令。
+
+该话题用于传递云台控制信息，不包含发射控制指令。
+
+### 2. ROS2 信息订阅
+
+| Topic             | Message Type                       | 说明      |
+| ----------------- | ---------------------------------- | ------- |
+| `/enemy_status`   | `restar_msgs/msg/EnemyStatusMsg`   | 敌方机器人状态 |
+| `/autoaim_target` | `restar_msgs/msg/AutoaimTargetMsg` | 目标选择信息  |
+
+#### 敌方状态
+
+通过 `enemy_status` 接收敌方相关状态，包括 `invincible_enemy_ids` 等信息。
+
+#### 目标选择
+
+通过 `autoaim_target` 接收目标 ID 列表，供视觉系统进行目标选择和处理。
+
+订阅模块对接收状态进行线程同步与时间有效性管理。
+
+两类输入的默认超时时间约为 **1500 ms**。当数据长时间未更新时，系统不继续将过期内容作为当前有效输入。
+
+### 3. ROS2 运行时管理
+
+项目使用独立的 ROS2 运行时封装，对节点生命周期进行管理。
+
+主要包括：
+
+* 私有 `rclcpp::Context`；
+* executor 管理；
+* ROS2 工作线程；
+* 节点启动与关闭；
+* 通信资源释放。
+
+该设计便于视觉模块嵌入现有 C++ 程序，并支持独立通信测试。
+
+---
+
+## 🔗 MC02 串口通信
+
+MC02 通信模块负责将导航与云台数据转换为二进制数据帧，实现上位机与下位机之间的通信。
+
+### 通信数据流
+
+```mermaid
+flowchart TD
+    A["Navigation /cmd_vel"] --> D["MC02 Bridge"]
+    B["Vision /gimbal_cmd"] --> D
+    C["Vision /target"] --> D
+
+    D --> E["Validity & Timeout Checks"]
+    E --> F["MC02 Frame Encoding"]
+    F --> G["CRC16"]
+
+    G --> H{"Transport"}
+    H --> I["Mock /bridge/frame"]
+    H --> J["Serial Device"]
 ```
-```math
-DPS = 单位时间射击窗口占比 \times 射频 \times 单发子弹伤害
+
+### 1. ROS2 输入输出
+
+| Topic                | Message Type                          | 功能           |
+| -------------------- | ------------------------------------- | ------------ |
+| `/cmd_vel`           | `geometry_msgs/msg/Twist`             | 导航速度输入       |
+| `/vision/gimbal_cmd` | `robot_interfaces/msg/GimbalCommand`  | 云台角度输入       |
+| `/vision/target`     | `robot_interfaces/msg/VisionTarget2D` | 目标有效性检查与诊断   |
+| `/bridge/frame`      | `std_msgs/msg/UInt8MultiArray`        | Mock 模式下的协议帧 |
+| `/bridge/status`     | `diagnostic_msgs/msg/DiagnosticArray` | 桥接状态与诊断信息    |
+
+导航速度主要使用：
+
+```text
+linear.x
+linear.y
+angular.z
 ```
-不难看出，重合度越高，单位时间射击窗口占比越高，DPS越高，击杀时间越短，自瞄效果越好。
 
-轨迹重合度和云台控制能力息息相关。云台最大加速度的高低决定了云台控制能力的好坏，云台能产生的瞬时加速度越大，跟随轨迹变化的能力越强，轨迹重合度越高。云台最大加速度计算公式如下：
-```math
-云台最大加速度 = \frac{云台电机最大扭矩}{云台惯量}
+云台控制主要使用：
+
+```text
+yaw
+pitch
+valid
+control_enabled
 ```
-其中，云台电机最大扭矩一般由电机厂家给出，云台惯量通过系统辨识[5]得出。除了云台最大加速度，控制算法的设计也会影响最终的云台控制效果，为了尽可能降低控制难度，我们采取了多种措施：
-1. 我们提出了“自瞄轨迹规划器”，根据云台最大加速度优化射击轨迹，使其更容易被云台跟随。
-2. 我们计算了轨迹对应的速度和加速度，作为前馈量一并发送给电控，提高云台的响应。
-3. 我们采用了计算力矩控制算法[6]，其结合PID控制和动力学模型，相比双环PID调参更加简便。
 
-除了击杀时间，命中率也可以在轨迹视角下进行分析。我们可以将云台轨迹划分为“重合射击轨迹段”和“偏离射击轨迹段”，二者的比例决定了理论命中率上限：
-```math
-命中率 \le 重合度 = \frac{重合射击轨迹段}{(重合射击轨迹段 + 偏离射击轨迹段)}
+目标话题用于输入有效性判断与诊断，不直接将目标坐标写入 MC02 v1 数据帧。
+
+### 2. MC02 二进制协议
+
+MC02 v1 使用固定长度 **34 字节**的数据帧。
+
+| Offset | Field               | Size    |
+| ------ | ------------------- | ------- |
+| 0–1    | Header `SP`         | 2 Bytes |
+| 2      | Version `0x01`      | 1 Byte  |
+| 3      | Message Type `0x01` | 1 Byte  |
+| 4–5    | Sequence            | 2 Bytes |
+| 6–7    | Payload Length      | 2 Bytes |
+| 8–11   | vx                  | 4 Bytes |
+| 12–15  | vy                  | 4 Bytes |
+| 16–19  | wz                  | 4 Bytes |
+| 20–23  | yaw                 | 4 Bytes |
+| 24–27  | pitch               | 4 Bytes |
+| 28     | nav_valid           | 1 Byte  |
+| 29     | gimbal_valid        | 1 Byte  |
+| 30     | control_enabled     | 1 Byte  |
+| 31     | Reserved            | 1 Byte  |
+| 32–33  | CRC16               | 2 Bytes |
+
+数值字段采用小端格式，其中速度与角度字段为 `float32`。
+
+协议实现位于：
+
+```text
+io/mc02_serial/
+├── include/
+├── src/
+└── test/
 ```
-云台在移动过程中，不可避免地会出现偏离射击轨迹的情况，当该情况发生时，应停止开火，减少弹丸的浪费，保证命中率。在自瞄轨迹规划器中，我们将上述情况作为开火决策的依据，在保证击杀时间的同时提高命中率。
 
-击杀时间越短、命中率越高，自瞄效果越好。前者依赖良好的瞄准位置决策，后者则依赖良好的开火决策。我们从轨迹视角出发，用自瞄轨迹规划器替代传统自瞄决策器：通过考虑云台控制的能力，使得决策后的瞄准位置的更具可行性；通过考虑射击轨迹和规划后轨迹的偏差，结合开火延迟时间，使得开火决策更加简洁清晰，无需额外的分段参数，调试时更加方便。
+### 3. 通信安全机制
 
-### 4.4 轨迹规划器
-轨迹突变问题和提前减速策略。小陀螺时装甲板会发生切换，导致目标轨迹和射击轨迹突变，不连续点处的瞬时速度和加速度未定义，强行让控制算法跟随这样的轨迹会有明显的超调或滞后现象。针对轨迹突变问题，轨迹规划器采取“提前减速策略”：若未来一段时间后装甲板会发生切换，则提前减速向下一个装甲板过渡，使规划后轨迹的加速度小于云台最大加速度，如图4.2所示。
-![提前减速策略](https://github.com/user-attachments/assets/f3c60424-5ece-4eff-a14e-f30fd9ddd584)
-图4.2 提前减速策略示意图
+通信模块提供多种状态检查机制：
 
-该策略的实现方式不止一种，我们尝试了两种方案：
-1. 隐式搜索，以规划后轨迹加速度序列为变量，构造代价函数（重合度尽可能高）和约束条件（不超过云台最大加速度），将该问题转换为二次规划问题，调用第三方库TinyMPC[7]求解。该库针对MPC问题的求解进行了加速优化，实测求解耗时小于1ms。这里MPC并非闭环控制器，而是作为求解器寻找可行轨迹解，其输入不包含云台的实际状态。我们也尝试过使用MPC直接作为闭环控制器，通过下位机转发MPC求解后的力矩指令给电机，当自身小陀螺时，控制效果不如下位机方案。
-2. 显式搜索，以过渡时间为变量，确定切换点前后的起点和终点，使用五次多项式生成过渡段轨迹，调整时间长度，直到满足加速度限制。该方案确定性高，“跟随段”不会参与优化，和射击轨迹重合，在高转速下更加稳定。同时实现更加轻量，无需依赖第三方库和QR矩阵等额外参数。
+* 输入消息超时检测；
+* 非有限浮点数检查；
+* 消息时间戳有效性检查；
+* 无效控制数据清零；
+* CRC16 数据校验；
+* 串口断线重连；
+* 通信异常后的运动使能保护。
 
-由于时间有限，方案二仅进行了仿真验证，未上车测试，国赛上场采用了方案一。
+默认配置如下：
 
-开火延迟问题和提前开火决策。从开火命令发送到子弹出膛（摩擦轮掉速）存在时间延迟t_fire，仅考虑当前位置误差进行开火判断并不严谨。轨迹规划器会生成一段时间内的轨迹序列，通过查询t_fire时刻射击轨迹和对应规划后轨迹的误差，判断经过t_fire时间后子弹是否应该出膛，从而实现更加精细的开火决策。该方案的前提是开火延迟无波动，对机械和电控的要求较高。
+| 参数     | 默认值            |
+| ------ | -------------- |
+| 帧发送频率  | 50 Hz          |
+| 导航超时   | 200 ms         |
+| 云台超时   | 200 ms         |
+| 目标超时   | 500 ms         |
+| 串口波特率  | 115200         |
+| 串口配置   | 8N1            |
+| 串口设备   | `/dev/ttyACM0` |
+| 传输模式   | `mock`         |
+| 运动输出使能 | `false`        |
 
-预测时间偏移量。射击轨迹提前于目标轨迹的时间称为预测时间，预测时间除了子弹飞行时间外，还需考虑各个环节引入的时间延迟，包括：
-- 图像传输延迟：图像时间戳对应接收完成的时刻，需要图像传输至小电脑的时间。
-- 图像处理延迟：神经网络推理耗时无法忽略，需要考虑图像开始处理到形成决策命令的时间。
-- 下位机通信延迟：向下位机传输决策命令所需的时间。
-- 下位机控制延迟：控制云台到目标位置所需的时间。
+**注意：**默认使用 Mock 模式，真实串口运动输出默认关闭。正式连接下位机前，需要验证协议、控制单位及故障停止机制。
 
-这里不需要考虑开火延迟，因为在射击轨迹上任意时间发射均会命中[3]。在实际代码实现中，除了图像处理延迟可以直接计算外，我们把其余延迟时间的总和作为一个调试参数[8]，通过拍摄慢动作视频、比较击杀时间等方式进行调整，约15ms。
+---
 
+## 💻 开发环境
 
-## 5 未来优化方向
-将轨迹规划器部署到更多兵种上。由于时间有限，国赛中仅步兵使用了轨迹规划器。我们非常期待其在英雄（射频低）、哨兵（惯量大）、无人机（射频高）上的表现。
+### 推荐环境
 
-边跑边打。目前的自瞄并没有考虑自身的移动，无法边跑边打。在本赛季，步兵经常需要从狗洞冲下去杀对面静止的英雄，而此时自瞄会认为对面在移动，导致前几发打不准，限制了操作手的发挥。我们计划引入轮式里程计信息，改善在该场景下的表现。
+| 组件       | 版本               |
+| -------- | ---------------- |
+| 操作系统     | Ubuntu 22.04 LTS |
+| 编程语言     | C++17            |
+| 编译器      | GCC 11           |
+| 构建工具     | CMake 3.16.3+    |
+| ROS2     | Humble           |
+| OpenCV   | 4.5.4            |
+| OpenVINO | 2024.6           |
+| Eigen    | Eigen3           |
+| 日志库      | spdlog           |
+| 格式化库     | fmt              |
+| 配置管理     | yaml-cpp         |
+| JSON     | nlohmann-json    |
 
+视觉硬件部分根据实际使用的相机安装 HikRobot MVS、MindVision 等相关 SDK。
 
-## 参考文献
-[1] Alan Day.【RM2024赛季-识别模型】深圳大学-RobotPilots[EB/OL]. RoboMaster论坛. https://bbs.robomaster.com/article/54091, 2025.
+### ROS2 依赖
 
-[2] gaoxin.【RM2024-识别训练网络及推理代码开源】北京科技大学Reborn[EB/OL]. RoboMaster论坛. https://bbs.robomaster.com/article/9655, 2024.
+主要使用：
 
-[3] 方俊杰. Linear Modelled Top Detector[EB/OL]. GitHub. https://github.com/julyfun/rm.cv.fans, 2023.
+```text
+rclcpp
+ament_cmake
+std_msgs
+geometry_msgs
+diagnostic_msgs
+rcl_interfaces
+rosidl_typesupport_cpp
+robot_interfaces
+restar_msgs
+```
 
-[4] 陈君. rm_vision[EB/OL]. GitHub. https://github.com/chenjunnn/rm_vision, 2023.
+其中 `robot_interfaces` 和 `restar_msgs` 是自定义 ROS2 接口包，需要预先在 ROS2 工作空间中完成构建，并确保当前终端能够找到对应包。
 
-[5] 桂凯. 系统辨识心得分享[EB/OL]. 知乎. https://www.zhihu.com/question/57405191/answer/153098166, 2017.
+---
 
-[6] Lynch K M, Park F C. Modern Robotics: Mechanics, Planning, and Control[M]. Cambridge: Cambridge University Press, 2017.
+## 🚀 编译与运行
 
-[7] Nguyen K, Schoedel S, Alavilli A, et al. TinyMPC: Model-predictive control on resource-constrained microcontrollers[C]//2024 IEEE International Conference on Robotics and Automation (ICRA). IEEE, 2024: 1-7.
+### 1. 获取源码
 
-[8] 王洪玺, 计泽贤, 张兰勇. 基于卡尔曼滤波的目标识别跟踪与射击系统设计[J]. Journal of Ordnance Equipment Engineering, 2022, 43(11). 
+```bash
+git clone -b new https://github.com/Ze-CHEN1/restar-25.git
+cd restar-25
+```
 
+### 2. 安装基础依赖
 
-## 项目成员
-王骁扬、杨佳轩、奚睿豪、俞选涛、吴圳楠、杨瑞灵、程翔宇
+```bash
+sudo apt update
+
+sudo apt install -y \
+  git g++ cmake make pkg-config \
+  libopencv-dev \
+  libfmt-dev \
+  libeigen3-dev \
+  libspdlog-dev \
+  libyaml-cpp-dev \
+  nlohmann-json3-dev \
+  libusb-1.0-0-dev \
+  can-utils \
+  python3-pytest
+```
+
+此外还需安装 OpenVINO 和所需的相机 SDK。
+
+项目 CMake 默认使用：
+
+```cmake
+set(OpenVINO_DIR "/opt/intel/openvino_2024.6.0/runtime/cmake/")
+```
+
+若实际安装路径不同，需要根据本机环境调整。
+
+### 3. 配置 ROS2 环境
+
+```bash
+source /opt/ros/humble/setup.bash
+source /path/to/your_ros2_ws/install/setup.bash
+```
+
+请将 `/path/to/your_ros2_ws` 替换为实际 ROS2 工作空间路径。
+
+### 4. 编译完整系统
+
+```bash
+cmake -S . -B build \
+  -DRESTAR_WITH_ROS2=ON
+
+cmake --build build -j"$(nproc)"
+```
+
+此模式用于构建完整视觉系统和 ROS2 相关模块。
+
+主要程序包括：
+
+```text
+sentry
+sentry_bp
+sentry_debug
+sentry_multithread
+```
+
+运行这些程序前，需要完成相机、机器人通信及配置文件的检查。
+
+### 5. 编译独立 ROS2 工具
+
+对于暂时没有机器人硬件、主要需要进行通信调试的开发环境，可以使用 ROS2 Tools Only 构建模式。
+
+```bash
+cmake -S . -B build-ros2 \
+  -DRESTAR_ROS2_TOOLS_ONLY=ON
+
+cmake --build build-ros2 -j"$(nproc)"
+```
+
+该模式主要构建 ROS2 通信工具、MC02 桥接和相关测试程序，不编译完整视觉算法与哨兵程序。
+
+主要可执行程序：
+
+```text
+build-ros2/io/ros2/restar_ros_mock
+build-ros2/io/ros2/restar_ros_lifecycle_test
+build-ros2/io/ros2/restar_ros_inputs_test
+build-ros2/io/ros2/mc02_serial_bridge_node
+build-ros2/io/ros2/mc02_mock_receiver
+build-ros2/io/ros2/mc02_frame_dump
+```
+
+需要注意，该构建模式仍依赖对应的 ROS2 自定义接口包。
+
+### 6. 编译视频回放程序
+
+```bash
+cmake -S . -B build-replay \
+  -DRESTAR_WITH_ROS2=OFF \
+  -DRESTAR_BUILD_ROS2_REPLAY=ON
+
+cmake --build build-replay -j"$(nproc)"
+```
+
+生成：
+
+```text
+build-replay/restar_ros_replay
+```
+
+此模式用于使用视频和姿态文件运行视觉算法，并发布 ROS2 结果。
+
+回放仍需要视觉算法、模型、OpenVINO 和对应配置文件，并需要满足项目 CMake 中的 ROS2 接口依赖。
+
+### 7. 非 ROS2 编译
+
+在不需要 ROS2 功能时，可以使用：
+
+```bash
+cmake -S . -B build-no-ros2 \
+  -DRESTAR_WITH_ROS2=OFF \
+  -DRESTAR_BUILD_ROS2_REPLAY=OFF
+
+cmake --build build-no-ros2 -j"$(nproc)"
+```
+
+该模式主要用于编译非 ROS2 视觉程序及相关工具。
+
+---
+
+## 🧪 无硬件调试
+
+项目支持在不连接实际工业相机、云台及下位机的情况下，进行部分通信与算法测试。
+
+### 1. ROS2 Mock 发布器
+
+Mock 发布器用于产生模拟的视觉目标和云台控制消息，方便调试 ROS2 通信链路。
+
+启动：
+
+```bash
+./build-ros2/io/ros2/restar_ros_mock --ros-args \
+  -p mock_case:=valid \
+  -p mock_rate_hz:=30.0 \
+  -p duration_s:=10.0
+```
+
+支持的测试场景包括：
+
+| Case        | 说明        |
+| ----------- | --------- |
+| `valid`     | 有效目标与控制消息 |
+| `invalid`   | 无效消息      |
+| `nonfinite` | 非有限数值     |
+| `no_target` | 无目标状态     |
+| `disabled`  | 控制禁用状态    |
+
+在另一个终端查看话题：
+
+```bash
+ros2 topic echo /vision/target \
+  --qos-reliability best_effort
+```
+
+或者：
+
+```bash
+ros2 topic echo /vision/gimbal_cmd
+```
+
+Mock 模式不运行神经网络推理，主要用于通信接口、消息结构与有效性逻辑的验证。
+
+### 2. 视频与姿态回放
+
+视频回放程序用于在无实际机器人硬件的情况下运行视觉算法。
+
+输入数据包括：
+
+```text
+PREFIX.avi
+PREFIX.txt
+```
+
+其中：
+
+* `PREFIX.avi`：录制的视频；
+* `PREFIX.txt`：与视频帧对应的姿态数据。
+
+姿态文件每帧对应一行：
+
+```text
+t w x y z
+```
+
+`t` 为录制时间，后续四个字段为姿态四元数。
+
+要求时间戳严格递增，姿态数据与视频帧正确对应。
+
+运行示例：
+
+```bash
+./build-replay/restar_ros_replay --ros-args \
+  -p config_path:=configs/demo.yaml \
+  -p input_prefix:=assets/demo/demo \
+  -p start_frame:=0 \
+  -p max_frames:=300 \
+  -p replay_rate_hz:=30.0 \
+  -p bullet_speed_mps:=27.0 \
+  -p trace_csv:=/tmp/restar_replay_trace.csv
+```
+
+其中 `input_prefix` 必须指向实际存在的视频和姿态文件。
+
+回放流程：
+
+```text
+Recorded Video
+      ↓
+YOLO Detection
+      ↓
+PnP Solver
+      ↓
+EKF Tracker
+      ↓
+Aimer
+      ↓
+ROS2 Publisher
+      ↓
+Trace CSV
+```
+
+回放程序支持记录算法与通信相关信息，便于离线分析。
+
+CSV 中包括：
+
+* 帧号；
+* 录制时间；
+* 目标有效性；
+* 云台指令有效性；
+* 瞄准角度；
+* 算法处理耗时；
+* 发布耗时。
+
+回放过程不会访问实际云台、CAN 或串口控制设备。
+
+### 3. MC02 Mock 桥接
+
+MC02 桥接节点支持 Mock 传输方式，可以通过 ROS2 话题发布协议帧，而不连接下位机。
+
+启动桥接节点：
+
+```bash
+./build-ros2/io/ros2/mc02_serial_bridge_node --ros-args \
+  -p transport:=mock \
+  -p frame_rate_hz:=50.0
+```
+
+另一个终端启动接收器：
+
+```bash
+./build-ros2/io/ros2/mc02_mock_receiver
+```
+
+查看诊断：
+
+```bash
+ros2 topic echo /bridge/status
+```
+
+Mock 模式下，编码后的 MC02 帧通过 `/bridge/frame` 发布，可用于验证协议编码、校验及输入状态处理。
+
+### 4. MC02 数据记录与解析
+
+Mock 接收器支持将收到的协议帧保存为二进制文件。
+
+```bash
+./build-ros2/io/ros2/mc02_mock_receiver --ros-args \
+  -p output_file:=/tmp/mc02_capture.bin
+```
+
+捕获文件生成后，可以使用解析工具读取：
+
+```bash
+./build-ros2/io/ros2/mc02_frame_dump \
+  /tmp/mc02_capture.bin
+```
+
+解析工具可将数据帧解码为便于查看和分析的 CSV 格式。
+
+---
+
+## ⚙️ 系统配置
+
+### 1. 视觉配置
+
+视觉算法参数主要由 `configs/` 目录中的 YAML 文件管理。
+
+例如：
+
+```text
+configs/
+├── demo.yaml
+├── sentry.yaml
+└── ...
+```
+
+常见配置内容包括：
+
+| 参数               | 说明         |
+| ---------------- | ---------- |
+| `yolo_name`      | 检测网络名称     |
+| `device`         | 推理设备       |
+| `min_confidence` | 最低检测置信度    |
+| `roi`            | 感兴趣区域      |
+| `use_roi`        | 是否使用静态 ROI |
+| PnP 参数           | 目标位姿解算     |
+| Tracker 参数       | 目标跟踪       |
+| Aimer 参数         | 瞄准与预测      |
+| Ballistics 参数    | 弹道补偿       |
+
+配置应根据实际相机、机器人结构和控制需求进行调整。
+
+### 2. MC02 参数
+
+MC02 桥接节点通过 ROS2 参数进行配置。
+
+| Parameter                 | Default             | Description              |
+| ------------------------- | ------------------- | ------------------------ |
+| `transport`               | `mock`              | Transport mode           |
+| `frame_rate_hz`           | `50.0`              | Frame rate               |
+| `nav_topic`               | `cmd_vel`           | Navigation input         |
+| `gimbal_topic`            | `vision/gimbal_cmd` | Gimbal input             |
+| `target_topic`            | `vision/target`     | Vision target input      |
+| `subscribe_target`        | `true`              | Enable target monitoring |
+| `frame_topic`             | `bridge/frame`      | Mock frame topic         |
+| `nav_timeout_ms`          | `200.0`             | Navigation timeout       |
+| `gimbal_timeout_ms`       | `200.0`             | Gimbal timeout           |
+| `target_timeout_ms`       | `500.0`             | Vision target timeout    |
+| `future_tolerance_ms`     | `50.0`              | Timestamp tolerance      |
+| `serial_device`           | `/dev/ttyACM0`      | Serial port              |
+| `serial_motion_enabled`   | `false`             | Motion output enable     |
+| `serial_reconnect_ms`     | `250`               | Reconnect interval       |
+| `serial_write_timeout_ms` | `50`                | Write timeout            |
+
+桥接还支持配置导航、云台和目标订阅的 QoS reliability。
+
+部分参数为启动时配置，修改后需要重新启动节点。
+
+### 3. 串口模式
+
+连接实际 MC02 时，可配置串口传输模式。
+
+```bash
+./build-ros2/io/ros2/mc02_serial_bridge_node --ros-args \
+  -p transport:=serial \
+  -p serial_device:=/dev/ttyACM0 \
+  -p serial_motion_enabled:=false
+```
+
+如果设备权限不足，可检查串口所属用户组：
+
+```bash
+ls -l /dev/ttyACM*
+```
+
+必要时配置用户串口访问权限：
+
+```bash
+sudo usermod -aG dialout "$USER"
+```
+
+重新登录后生效。
+
+运动输出在默认配置下保持关闭。实际部署前需要完成协议一致性、控制单位及硬件安全验证。
+
+---
+
+## 🧪 测试
+
+项目包含通信协议、ROS2 生命周期、消息处理、串口通信和集成测试。
+
+编译测试程序后，可通过 CTest 执行：
+
+```bash
+ctest --test-dir build-ros2 -N
+```
+
+运行测试：
+
+```bash
+ctest --test-dir build-ros2 \
+  --output-on-failure
+```
+
+### 测试内容
+
+| 测试模块                        | 验证内容                 |
+| --------------------------- | -------------------- |
+| `restar_ros_lifecycle_test` | ROS2 Context 与节点生命周期 |
+| `restar_ros_inputs_test`    | ROS2 消息输入、目标选择与超时    |
+| `mc02_protocol_test`        | 协议编码、解码与异常数据         |
+| `mc02_crc_compat_test`      | CRC 校验兼容性            |
+| `mc02_serial_sender_test`   | 串口发送与异常处理            |
+| `mc02_bridge_runtime`       | ROS2 桥接运行测试          |
+| `mc02_serial_pty`           | 伪终端串口通信测试            |
+| `mc02_frame_dump`           | 二进制帧离线解析             |
+
+建议在正式部署前分别验证算法处理、ROS2 通信、MC02 协议和实际硬件控制链路。
+
+部分 C++ 测试使用 `assert`，在 Release 构建模式下应注意检查断言是否启用，确保测试结果有效。
+
+---
+
+## 📂 项目结构
+
+```text
+restar-25/
+│
+├── assets/                       # 模型与相关资源
+│
+├── calibration/                  # 相机及系统标定
+│
+├── configs/                      # YAML 配置文件
+│
+├── io/                           # 硬件与通信接口
+│   ├── camera.cpp                # 相机接口
+│   ├── cboard.cpp                # 控制板通信
+│   ├── gimbal/                   # 云台通信
+│   │
+│   ├── ros2/                     # ROS2 通信模块
+│   │   ├── runtime.hpp           # ROS2 运行时管理
+│   │   ├── publish2nav.cpp       # 视觉信息发布
+│   │   ├── subscribe2nav.cpp     # ROS2 信息订阅
+│   │   ├── mock_publisher.cpp    # Mock 消息发布
+│   │   │
+│   │   └── mc02_bridge/          # MC02 ROS2 桥接
+│   │
+│   └── mc02_serial/              # MC02 串口协议
+│       ├── include/
+│       ├── src/
+│       └── test/
+│
+├── src/                          # 主程序入口
+│   ├── standard.cpp
+│   ├── sentry.cpp
+│   ├── ros2_replay.cpp
+│   └── ...
+│
+├── tasks/                        # 算法任务模块
+│   ├── auto_aim/                 # 自动瞄准算法
+│   └── omniperception/           # 全向感知
+│
+├── tests/                        # 测试程序
+│
+├── tools/                        # 通用工具模块
+│
+├── CMakeLists.txt                # CMake 构建配置
+├── autostart.sh                  # 启动脚本
+└── readme.md                     # 项目文档
+```
+
+---
+
+## ⚠️ 开发与部署注意事项
+
+### 1. 坐标系与时间戳
+
+视觉目标数据主要用于视觉与云台控制流程。
+
+与导航系统集成时，需要明确不同模块使用的坐标系，并完成必要的坐标转换与标定。
+
+ROS2 消息时间戳、相机采集时间和算法处理时间也应根据实际应用进行区分。
+
+### 2. 消息有效性
+
+使用视觉与云台消息时，应检查 `valid`、`control_enabled` 等字段，而不是仅依据消息是否到达来判断数据是否可用。
+
+对于超时或失效的数据，控制系统应采用明确的安全处理策略。
+
+### 3. MC02 串口通信
+
+MC02 桥接提供串口写入、重连和诊断机制。
+
+串口发送成功代表操作系统接受了相关数据，并不代表 MCU 已经完成接收、解析或执行。
+
+实际控制系统应根据下位机协议和硬件设计实施端到端验证。
+
+### 4. 硬件控制
+
+运行完整哨兵程序前，应检查相机配置、云台控制参数、机器人通信接口及安全停止机制。
+
+建议按照 Mock 通信、离线回放、通信台架、硬件联调的顺序进行系统验证。
+
+### 5. 性能验证
+
+系统的实际检测帧率、算法时延、ROS2 通信时延及控制效果与硬件配置、模型规模和运行场景有关。
+
+应在目标机器人平台上开展性能测试，并使用统一的测试方法记录结果。
+
+---
+
+## 🔭 后续开发方向
+
+项目将围绕视觉算法性能、系统通信可靠性和机器人平台集成持续优化。
+
+主要方向包括：
+
+* **视觉检测优化**：持续改进模型推理性能和复杂场景下的装甲板检测稳定性。
+* **目标跟踪与预测**：优化目标状态估计、切换与短时丢失处理。
+* **ROS2 系统集成**：完善通信接口、坐标转换和消息时效管理。
+* **MC02 通信可靠性**：完善下位机协议适配、状态反馈及故障恢复机制。
+* **系统测试与评估**：建立可复现的回放、通信和硬件测试流程。
+* **工程化部署**：完善构建环境、参数管理、调试工具和机器人部署流程。
+
+---
+
+## 🙏 致谢
+
+本项目基于同济大学 **SuperPower 战队** 开源视觉工程进行开发与工程实践，并结合 Restar 机器人平台的实际需求进行系统集成和功能扩展。
+
+感谢 SuperPower 战队及 RoboMaster 开源社区在机器人视觉、目标检测、运动预测、云台控制和软件工程方面的开源贡献。
+
+相关开源项目：
+
+* [SuperPower / sp_vision_25](https://github.com/TongjiSuperPower/sp_vision_25)
+* [SuperPower / sp_vision_24](https://github.com/TongjiSuperPower/sp_vision_24)
+* [SuperPower / sp_vision_23](https://github.com/TongjiSuperPower/sp_vision_23)
+
+同时感谢 RoboMaster 社区开发者分享的技术资料、算法实现及工程经验。
+
+---
+
+## 📚 参考资料
+
+1. Alan Day. [RM2024赛季-识别模型](https://bbs.robomaster.com/article/54091). RoboMaster 论坛, 2025.
+2. gaoxin. [RM2024-识别训练网络及推理代码开源](https://bbs.robomaster.com/article/9655). RoboMaster 论坛, 2024.
+3. 方俊杰. [Linear Modelled Top Detector](https://github.com/julyfun/rm.cv.fans). GitHub, 2023.
+4. 陈君. [rm_vision](https://github.com/chenjunnn/rm_vision). GitHub, 2023.
+5. Lynch K. M., Park F. C. *Modern Robotics: Mechanics, Planning, and Control*. Cambridge University Press, 2017.
+6. Nguyen K., Schoedel S., Alavilli A., et al. *TinyMPC: Model-predictive control on resource-constrained microcontrollers*. ICRA, 2024.
+7. 王洪玺、计泽贤、张兰勇. 基于卡尔曼滤波的目标识别跟踪与射击系统设计. *Journal of Ordnance Equipment Engineering*, 2022, 43(11).
+
+---
+
+## 📄 License
+
+本项目采用 [MIT License](LICENSE)。
+
+项目涉及的 OpenVINO、ROS2、相机 SDK 及其他第三方依赖遵循各自的开源协议和许可要求。
+
+---
+
+**Restar Vision 2025**
+
+*Robotic Perception · Target Tracking · ROS2 Integration*
